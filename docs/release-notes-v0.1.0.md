@@ -4,9 +4,11 @@
 
 ### ダウンロード
 - **Windows**：`LaTeX Problem Editor Setup 0.1.0.exe`（インストーラー）
-- **macOS**：Actions のワークフロー登録後に、次の版から添付されます
+- **macOS（Apple シリコン / M1 以降）**：`LaTeX Problem Editor-0.1.0-arm64.dmg`（または `.zip`）
 
-コード署名をしていないため、初回起動時に Windows の SmartScreen（「Windows によって PC が保護されました」）が表示されます。「詳細情報」→「実行」で起動できます。
+コード署名をしていないため、初回起動時に警告が出ます。
+- Windows：SmartScreen の「Windows によって PC が保護されました」→「詳細情報」→「実行」
+- macOS：アプリを右クリック →「開く」（それでも開けない場合は「システム設定」→「プライバシーとセキュリティ」→「このまま開く」）
 
 PDF 作成には LuaLaTeX（Windows: TeX Live / macOS: MacTeX）が必要です。TeX がなくても「簡易PDF」で保存できます。
 
