@@ -305,6 +305,16 @@ export function texLayoutPreamble(l, docPt = 11) {
   const lm = `${left ? wi : Number(s.indent)}mm`;
   L.push(`\\setlength{\\leftmargini}{${lm}}\\setlength{\\leftmarginii}{${lm}}\\setlength{\\leftmarginiii}{${lm}}\\setlength{\\labelsep}{${Number(s.sep)}mm}`);
   L.push('\\makeatletter');
+  // 小問のまとまりの前後（前の文章との間・後の文章との間）にも小問どうしと同じ空きを入れる。
+  // 実物の冊子では「本文 → 1 行空き → (1) → 1 行空き → 本文 → 1 行空き → (2)」のように並ぶ。
+  // 小問（enumerate）の中だけで設定する（center などほかの環境の前後の空きは変えない）。
+  const g = `${Number(s.gap)}mm`;
+  L.push(
+    `\\def\\lpe@pre{\\let\\lpe@oi\\@listi\\let\\lpe@oii\\@listii\\let\\lpe@oiii\\@listiii` +
+      `\\def\\@listi{\\lpe@oi\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}` +
+      `\\def\\@listii{\\lpe@oii\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}` +
+      `\\def\\@listiii{\\lpe@oiii\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}}`
+  );
   L.push(
     // 番号の幅は実際の幅に（既定の「字下げ−空き」だと字下げ 0 のとき負になり、番号の位置が崩れる）
     // 外側のリスト（ぶら下げの大問）の「番号の後の空き」を引き継がないよう、小問用の値を設定し直す

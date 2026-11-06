@@ -27,7 +27,7 @@ export function buildTex(doc) {
   L.push(`  \\in@{\\alph}{#1}\\ifin@\\expandafter\\def\\csname label\\@enumctr\\endcsname{${pl}\\alph{\\@enumctr}${pr}}\\else`);
   L.push(`  \\in@{\\roman}{#1}\\ifin@\\expandafter\\def\\csname label\\@enumctr\\endcsname{${pl}\\roman{\\@enumctr}${pr}}\\else`);
   L.push('  \\relax\\fi\\fi\\fi}'); // (\arabic*) を明示したときはテーマの既定の小問番号を使う
-  L.push('\\newcommand{\\lpe@install}{\\let\\lpe@enumerate\\enumerate\\renewcommand{\\enumerate}[1][]{\\lpe@enumerate\\lpe@setlabel{##1}\\lpe@subfix}}');
+  L.push('\\newcommand{\\lpe@install}{\\let\\lpe@enumerate\\enumerate\\renewcommand{\\enumerate}[1][]{\\lpe@pre\\lpe@enumerate\\lpe@setlabel{##1}\\lpe@subfix}}');
   L.push(
     `\\IfFileExists{enumitem.sty}{\\usepackage{enumitem}\\setlist[enumerate,1]{label=${sub.enumitem},${sub.setlist}}}{\\lpe@install\\renewcommand{\\labelenumi}{${sub.classic}}}`
   );

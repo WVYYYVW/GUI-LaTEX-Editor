@@ -229,7 +229,7 @@ UNIVERSITY_THEMES.push(
     bodyIndent: 17.4,
     parIndent: false,
     parSkip: 0,
-    sub: { paren: 'half', indent: 8.2, sep: 1.7, gap: ln(1, 11.4, 2.0) - 3, wrap: 'hang', wrapIndent: 0 },
+    sub: { paren: 'half', indent: 8.2, sep: 1.7, gap: 7.5, wrap: 'hang', wrapIndent: 0 }, // 小問の前後は実測で約 7.5mm の空き
     subLabel: 'paren',
     displayAlign: 'center',
     newPageEach: true,

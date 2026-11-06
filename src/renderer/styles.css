@@ -438,3 +438,5 @@ input.mid { width: 110px; }
 .cv-id td { width: 62mm; }
 .cv-footer { font-weight: 700; }
 @media print { #print-root .cover-page { break-after: page; } }
+/* 小問のまとまりの前後にも小問どうしと同じ空き（PDF の topsep と同じ） */
+.page ol { margin-top: var(--sub-gap) !important; margin-bottom: var(--sub-gap) !important; }

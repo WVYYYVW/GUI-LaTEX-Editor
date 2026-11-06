@@ -152,6 +152,16 @@ test('表紙を付けると、表紙の次のページを 1 ページ目にす�
   assert.doesNotMatch(buildTex(doc), /試験時間/);
 });
 
+test('小問のまとまりの前後にも小問の間隔を入れる（小問の中だけで設定する）', () => {
+  const doc = newDocument(true);
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-niigata'));
+  const tex = buildTex(doc);
+  assert.match(tex, /\\def\\@listi\{\\lpe@oi\\topsep7\.5mm/);
+  assert.match(tex, /\\renewcommand\{\\enumerate\}\[1\]\[\]\{\\lpe@pre\\lpe@enumerate/);
+  // 全体の \@listi は書き換えない（center などの前後の空きが変わらないように）
+  assert.doesNotMatch(tex, /\\let\\@listI\\@listi/);
+});
+
 test('句読点の統一は数式の中を変えない', () => {
   const l = { punct: 'commaPeriod' };
   assert.equal(applyPunct('a、b。$f(x)、y$', l, findMathRanges), 'a，b．$f(x)、y$');
