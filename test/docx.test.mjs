@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { docxToProblems, omml, parseXml } from '../src/renderer/lib/docxImport.js';
+import { docxToProblems, omml, parseXml, tidyBody } from '../src/renderer/lib/docxImport.js';
 
 const W = (body) => `<?xml version="1.0"?><w:document xmlns:w="w" xmlns:m="m"><w:body>${body}</w:body></w:document>`;
 const r = (t) => `<m:r><m:t>${t}</m:t></m:r>`;
@@ -37,4 +37,14 @@ test('数式段落の中の ∫・Σ・分数は Word と同じくディスプ�
   const body = docxToProblems(xml).problems[0].body;
   assert.match(body, /値は\$\\displaystyle \\frac\{1\}\{n\}\$である/);
   assert.match(body, /文中の\$\\frac\{1\}\{n\}\$/);
+});
+
+test('●◎ だけの数式は文章に戻し、Word の手での改行は前の行につなぐ', () => {
+  const src = '  \item $●●●◎◎◎, ●●●◎●●●$となる確率\n\n    をそれぞれ求めよ．';
+  assert.equal(tidyBody(src), '  \item ●●●◎◎◎，●●●◎●●●となる確率をそれぞれ求めよ．');
+  // 数式どうしの間の空白、\triangle、環境の終わりの後の文章はそのまま
+  const keep = '$x$\n    $=y$ と $\triangle ABC$\n\end{enumerate}\n\nただし，$p$は正とする．';
+  assert.equal(tidyBody(keep), keep);
+  // 句点で終わる行の後はつながない
+  assert.equal(tidyBody('求めよ．\n\nまた'), '求めよ．\n\nまた');
 });

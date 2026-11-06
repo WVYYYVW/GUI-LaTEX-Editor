@@ -158,6 +158,8 @@ test('小問のまとまりの前後にも小問の間隔を入れる（小問�
   const tex = buildTex(doc);
   assert.match(tex, /\\def\\@listi\{\\lpe@oi\\topsep7\.5mm/);
   assert.match(tex, /\\renewcommand\{\\enumerate\}\[1\]\[\]\{\\lpe@pre\\lpe@enumerate/);
+  // 入れ子の enumerate で包み直さない（無限に展開されて TeX が止まるのを防ぐ）
+  assert.match(tex, /\\itemsep7\.5mm\}\\let\\lpe@pre\\relax\}/);
   // 全体の \@listi は書き換えない（center などの前後の空きが変わらないように）
   assert.doesNotMatch(tex, /\\let\\@listI\\@listi/);
 });

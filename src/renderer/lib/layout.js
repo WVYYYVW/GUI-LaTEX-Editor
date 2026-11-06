@@ -313,7 +313,9 @@ export function texLayoutPreamble(l, docPt = 11) {
     `\\def\\lpe@pre{\\let\\lpe@oi\\@listi\\let\\lpe@oii\\@listii\\let\\lpe@oiii\\@listiii` +
       `\\def\\@listi{\\lpe@oi\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}` +
       `\\def\\@listii{\\lpe@oii\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}` +
-      `\\def\\@listiii{\\lpe@oiii\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}}`
+      `\\def\\@listiii{\\lpe@oiii\\topsep${g}\\partopsep\\z@\\parsep\\z@\\itemsep${g}}` +
+      // 入れ子の小問では包み直さない（包んだものをさらに包むと \lpe@oi が自分自身を呼び、TeX が止まらなくなる）
+      `\\let\\lpe@pre\\relax}`
   );
   L.push(
     // 番号の幅は実際の幅に（既定の「字下げ−空き」だと字下げ 0 のとき負になり、番号の位置が崩れる）

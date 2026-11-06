@@ -74,7 +74,8 @@ function plainChar(ch) {
 const mathText = (s) => [...s].map((c) => MATH_SYM[c] ?? MATH_SYM[plainChar(c)] ?? plainChar(c)).join('');
 
 // 日本語（かな・漢字・全角記号）。数式の中にあっても文章として外に出す
-const CJK = /[\u3001-\u30ff\u3400-\u9fff\uf900-\ufaff\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/;
+// ●◎◉■◆★☆ の記号も、数式の中に打たれていても文章として扱う（途中で折り返せるように）。△○□ などは数式の記号（\triangle など）として残す
+const CJK = /[\u3001-\u30ff\u3400-\u9fff\uf900-\ufaff\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65\u25a0\u25c6\u25c9\u25ce\u25cf\u2605\u2606]/;
 
 // ---------------- OMML → LaTeX ----------------
 const DELIM = { '(': '(', ')': ')', '[': '[', ']': ']', '{': '\\{', '}': '\\}', '|': '|', '‖': '\\|', '⌊': '\\lfloor', '⌋': '\\rfloor', '⌈': '\\lceil', '⌉': '\\rceil', '〈': '\\langle', '〉': '\\rangle', '⟨': '\\langle', '⟩': '\\rangle', '': '.' };
@@ -234,7 +235,7 @@ function splitMath(oMath) {
         continue;
       }
       // 日本語と英数が混ざった run は細かく分ける
-      for (const part of t.match(/[\u3000-\u30ff\u3400-\u9fff\uf900-\ufaff\uff01-\uff65]+|[^\u3000-\u30ff\u3400-\u9fff\uf900-\ufaff\uff01-\uff65]+/g) || []) {
+      for (const part of t.match(/[\u3000-\u30ff\u3400-\u9fff\uf900-\ufaff\uff01-\uff65\u25a0\u25c6\u25c9\u25ce\u25cf\u2605\u2606]+|[^\u3000-\u30ff\u3400-\u9fff\uf900-\ufaff\uff01-\uff65\u25a0\u25c6\u25c9\u25ce\u25cf\u2605\u2606]+/g) || []) {
         if (CJK.test(part) || /^[\s\u3000]+$/.test(part)) push('text', part.replace(/\u3000/g, ' '));
         else push('math', mathText(part));
       }
@@ -462,6 +463,19 @@ function groupItems(paras) {
 }
 
 /**
+ * 変換後の LaTeX を整える
+ *  - ●◎ などの記号だけの数式は文章に戻す（1 つの数式だと途中で折り返せない）
+ *  - Word で行の長さに合わせて手で改行した箇所（句点で終わらない行の次が、ひらがなで始まる段落）を前の行につなぐ
+ */
+export function tidyBody(s) {
+  // 記号で始まる $…$ だけを対象にする（「$x$ と $y$」の間の空白を 1 つの数式と取り違えないように）
+  s = s.replace(/\$([■◆◉◎●★☆][■◆◉◎●★☆ ,，、]*)\$/g, (_m, x) => x.replace(/\s*,\s*/g, '，'));
+  // 前の行が日本語の文字か数式（$）で終わるときだけ（\end{enumerate} などの後はつながない）
+  s = s.replace(/([ぁ-ゖァ-ヺー一-鿿々$])\n\n[ \t]*(?=[ぁ-ゖ])/g, '$1');
+  return s;
+}
+
+/**
  * Word の本文 XML → { title, problems }
  * 囲み番号（○1 や □2 など）で始まる段落を大問の区切りとみなす。
  * 番号の直後の「C***」のような表記は難易度（★の数）とランク、○/□ は文理の区分としてタグにする。
@@ -477,7 +491,7 @@ export function docxToProblems(xml, opts = {}) {
   let cur = null;
   const flush = () => {
     if (!cur) return;
-    cur.body = groupItems(cur.lines).trim() + '\n';
+    cur.body = tidyBody(groupItems(cur.lines)).trim() + '\n';
     delete cur.lines;
     delete cur.diffDone;
     problems.push(cur);
@@ -530,5 +544,5 @@ export function docxToLatex(xml) {
   const body = kid(kid(root, 'w:document'), 'w:body');
   if (!body) throw new Error('Word 文書の本文が見つかりません');
   const lines = kids(body, 'w:p').map((p) => tokensToLatex(readParagraph(p)));
-  return groupItems(lines).replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  return tidyBody(groupItems(lines)).replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
