@@ -26,3 +26,15 @@ test('囲み番号で大問を分け、数式内の日本語は文章として�
   assert.match(problems[0].body, /\\begin\{enumerate\}\n {2}\\item \$f\$を求めよ．\n\\end\{enumerate\}/);
   assert.deepEqual(problems[1].tags, ['理系']);
 });
+
+test('数式段落の中の ∫・Σ・分数は Word と同じくディスプレイの大きさにする', () => {
+  const frac = `<m:f><m:num>${r('1')}</m:num><m:den>${r('n')}</m:den></m:f>`;
+  const xml = W(
+    `<w:p>${enc('○', 1)}</w:p>` +
+      `<w:p><m:oMathPara><m:oMath><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>値は</m:t></m:r>${frac}<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>である．</m:t></m:r></m:oMath></m:oMathPara></w:p>` +
+      `<w:p><m:oMath><m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>文中の</m:t></m:r>${frac}</m:oMath></w:p>`
+  );
+  const body = docxToProblems(xml).problems[0].body;
+  assert.match(body, /値は\$\\displaystyle \\frac\{1\}\{n\}\$である/);
+  assert.match(body, /文中の\$\\frac\{1\}\{n\}\$/);
+});

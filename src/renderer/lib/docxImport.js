@@ -294,7 +294,8 @@ function readParagraph(p) {
         for (const seg of splitMath(c)) tokens.push(seg.kind === 'text' ? { type: 'text', s: seg.s } : { type: 'math', s: seg.s });
       } else if (c.name === 'm:oMathPara') {
         for (const om of kids(c, 'm:oMath')) {
-          for (const seg of splitMath(om)) tokens.push(seg.kind === 'text' ? { type: 'text', s: seg.s } : { type: 'math', s: seg.s });
+          // 数式段落（oMathPara）は Word ではディスプレイの大きさで表示される → display を記録
+          for (const seg of splitMath(om)) tokens.push(seg.kind === 'text' ? { type: 'text', s: seg.s } : { type: 'math', s: seg.s, display: true });
           tokens.push({ type: 'text', s: '\n' });
         }
       } else if (c.name === 'w:hyperlink' || c.name === 'w:smartTag' || c.name === 'w:ins' || c.name === 'w:fldSimple') {
@@ -320,6 +321,15 @@ const cleanMath = (s) => {
   }
   return t.replace(/\{([A-Za-z0-9])\}(?=[_^])/g, '$1');
 };
+
+/**
+ * Word の数式段落の中の式は、文中に置いてもディスプレイの大きさ（∫・Σ・分数・lim が大きい）で表示される。
+ * 見た目をそろえるため、大きさが変わる記号を含む式だけ \displaystyle を付ける。
+ */
+const BIG = /\\(int|iint|iiint|oint|sum|prod|frac|lim|binom|bigcup|bigcap|max|min)(?![a-zA-Z])/;
+export function displayIfBig(s, display) {
+  return display && BIG.test(s) && !/^\\displaystyle/.test(s) ? `\\displaystyle ${s}` : s;
+}
 
 const LABEL = /^\\left\( ?(\d+|i{1,3}|iv|vi{0,3}|ix|x|[a-h]) ?\\right\)\s*|^\((\d+|i{1,3}|iv|vi{0,3}|ix|x|[a-h])\)\s*/;
 
@@ -353,7 +363,7 @@ function liftTokens(tokens) {
       after = trail[1] === '.' ? '．' : '，';
       s = s.slice(0, -trail[0].length);
     }
-    if (s.trim()) out.push({ type: 'math', s });
+    if (s.trim()) out.push({ type: 'math', s, display: t.display });
     if (after) out.push({ type: 'text', s: after });
   }
   return out;
@@ -371,7 +381,7 @@ function tokensToLatex(tokens) {
   let out = '';
   for (const t of tokens) {
     if (t.type === 'text') out += t.s;
-    else if (t.type === 'math' && t.s.trim()) out += `$${cleanMath(t.s)}$`;
+    else if (t.type === 'math' && t.s.trim()) out += `$${displayIfBig(cleanMath(t.s), t.display)}$`;
   }
   return out
     .replace(/[ \t]*\n[ \t]*/g, '\n')
