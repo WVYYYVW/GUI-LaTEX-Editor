@@ -86,7 +86,7 @@ npm run dist:win
 npm run dist:mac
 ```
 
-macOS 版は Mac 上でビルドする必要があります。`v` で始まるタグを push すると、GitHub Actions（`.github/workflows/build.yml`）が Windows / macOS 両方のインストーラーを作ります（コード署名はしていないため、初回起動時に OS の警告が出ます）。
+macOS 版は Mac 上でビルドする必要があります。GitHub Actions で Windows / macOS 両方のインストーラーを自動で作るには、`docs/github-actions-build.yml` を GitHub 上で `.github/workflows/build.yml` として追加してください（`v` で始まるタグを push すると動きます。コード署名はしていないため、初回起動時に OS の警告が出ます）。
 
 ## ファイル形式
 
