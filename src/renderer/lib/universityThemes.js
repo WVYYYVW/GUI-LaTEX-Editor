@@ -221,6 +221,39 @@ export const UNIVERSITY_THEMES = [
   })(),
 ];
 
+// 新潟大学：公式の問題 PDF は非公開（入試課で閲覧のみ）。予備校が公開している本試験冊子のスキャン
+// （理系冊子 2025 年度。2024・2023 年度も同じ体裁）を計測した。
+UNIVERSITY_THEMES.push(
+  (() => {
+    const pt = 11;
+    const lh = 2.0;
+    return theme(
+      'univ-niigata',
+      '新潟大学',
+      '太枠の大きな番号をぶら下げ・(1)・1問1ページ',
+      'https://www.niigata-u.ac.jp/admissions/disclosure',
+      pt,
+      lh,
+      {
+        paper: 'b5',
+        charsPerLine: 30,
+        head: { style: 'box', boxRule: 'thick', font: 'gothic', bold: true, size: 20, position: 'hanging', showTitle: false, gap: z(1.5, pt) },
+        spaceBefore: 0,
+        bodyIndent: z(4.6, pt), // 本文の左端は枠の左端から約 4.6 字
+        parIndent: false,
+        parSkip: 0,
+        sub: { paren: 'half', indent: z(2, pt), sep: z(0.6, pt), gap: ln(1, pt, lh) - 3, wrap: 'hang', wrapIndent: 0 }, // (1) は本文の左端、本文は 2 字目から
+        subLabel: 'paren',
+        displayAlign: 'center',
+        newPageEach: true,
+        afterEach: 'blank',
+        pageNumber: 'dash',
+        punct: 'commaMaru',
+      }
+    );
+  })()
+);
+
 /** 調査したが体裁を確認できなかった大学（テーマは作っていない） */
 export const UNVERIFIED_UNIVERSITIES = [
   { name: '早稲田大学', reason: '公式サイトの問題 PDF を自動取得できず、体裁を確認できていません。' },

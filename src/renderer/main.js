@@ -15,6 +15,7 @@ import { paperSize, normalizeLayout } from './lib/layout.js';
 import { initFigureDialog } from './figureDialog.js';
 import { figureBlock, findFigures } from './lib/figure.js';
 import { setImageResolver } from './lib/preview.js';
+import { docxToProblems, docxToLatex } from './lib/docxImport.js';
 
 const api = window.api;
 const $ = (s) => document.querySelector(s);
@@ -950,6 +951,45 @@ $('#preview').addEventListener('dblclick', (e) => {
   if (fig) openFigure(fig);
 });
 
+// ---------------- Word（.docx）取り込み ----------------
+async function importDocx() {
+  if (!(await confirmDiscard())) return;
+  try {
+    const r = await api.openDocx();
+    if (!r) return;
+    const { title, problems } = docxToProblems(r.xml);
+    if (!problems.length) {
+      toast('大問の区切り（①や□2 などの囲み番号）が見つからなかったため、全体を 1 問として取り込みました', 'info', 6000);
+      problems.push(newProblem({ body: docxToLatex(r.xml) }));
+    }
+    const doc = newDocument(false);
+    doc.meta.title = title || r.name;
+    doc.problems = problems;
+    loadDocument(doc, null);
+    setDirty(true);
+    toast(`Word から ${problems.length} 問を取り込みました（数式は LaTeX に変換済み）`, 'info', 5000);
+  } catch (err) {
+    toast(`取り込めませんでした: ${err.message}`, 'error', 7000);
+  }
+}
+async function importDocxSolution() {
+  const p = currentProblem();
+  if (!p) return;
+  try {
+    const r = await api.openDocx();
+    if (!r) return;
+    const latex = docxToLatex(r.xml);
+    if (p.solution.trim() && !window.confirm('今の解答を Word の内容で置き換えますか？')) return;
+    p.solution = latex;
+    editor.reset();
+    selectProblem(p.id, 'solution');
+    setDirty(true);
+    toast('Word の内容を解答として取り込みました');
+  } catch (err) {
+    toast(`取り込めませんでした: ${err.message}`, 'error', 7000);
+  }
+}
+
 // ---------------- レイアウト / テーマ ----------------
 const layoutPanel = initLayoutPanel({
   getDoc: () => state.doc,
@@ -993,6 +1033,8 @@ const actions = {
   settings: openSettings,
   layout: () => layoutPanel.open(),
   figure: () => openFigure(),
+  'import-docx': importDocx,
+  'import-docx-solution': importDocxSolution,
   'add-problem': addProblem,
   'duplicate-problem': duplicateProblem,
   'delete-problem': deleteProblem,

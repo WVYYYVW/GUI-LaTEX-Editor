@@ -4,6 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const fssync = require('node:fs');
 const tex = require('./tex');
+const { readDocxXml } = require('./zip');
 
 const isMac = process.platform === 'darwin';
 const FILE_EXT = 'mathprob';
@@ -75,6 +76,9 @@ function buildMenu() {
         { label: 'PDF を作成（LaTeX）', accelerator: 'CmdOrCtrl+Shift+B', click: () => send('compile-pdf') },
         { label: 'プレビューを PDF 保存（TeX 不要）…', click: () => send('print-pdf') },
         { label: 'LaTeX ファイル (.tex) を書き出す…', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('export-tex') },
+        { type: 'separator' },
+        { label: 'Word（.docx）から問題集を取り込む…', click: () => send('import-docx') },
+        { label: 'Word（.docx）を今の問題の解答として取り込む…', click: () => send('import-docx-solution') },
         ...(isMac
           ? []
           : [
@@ -313,6 +317,18 @@ function registerIpc() {
       filters: process.platform === 'win32' ? [{ name: 'lualatex', extensions: ['exe'] }] : [],
     });
     return r.canceled ? null : r.filePaths[0];
+  });
+
+  // Word 文書（.docx）の本文 XML を読む（変換は画面側の docxImport.js）
+  ipcMain.handle('docx:open', async () => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: '取り込む Word 文書を選択',
+      properties: ['openFile'],
+      filters: [{ name: 'Word 文書', extensions: ['docx'] }],
+    });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const p = r.filePaths[0];
+    return { name: path.basename(p, path.extname(p)), xml: readDocxXml(await fs.readFile(p)) };
   });
 
   // 図：画像を選び、問題集と同じフォルダの figures に複製する

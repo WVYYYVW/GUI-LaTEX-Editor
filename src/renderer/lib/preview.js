@@ -160,6 +160,14 @@ function textToHtml(s) {
       else if (m[1] !== undefined) html += `<li class="li-custom"><span class="li-label">${m[1]}</span>`;
       else html += '<li>';
     } else {
+      // \begin{enumerate}\setcounter{enumi}{k} → (k+1) から番号を始める
+      const sc = p.match(/^\s*\\setcounter\{enumi\}\{(\d+)\}/);
+      if (sc && /<ol class="[^"]*">$/.test(html)) {
+        const k = Number(sc[1]);
+        html = html.replace(/<ol class="([^"]*)">$/, `<ol class="$1" start="${k + 1}" style="counter-reset: en ${k}">`);
+        html += p.slice(sc[0].length);
+        continue;
+      }
       html += p;
     }
   }
