@@ -46,6 +46,11 @@ export function defaultLayout() {
     paper: 'a4',
     landscape: false,
     margin: 20,
+    // 上下左右の余白（mm）。null のときは margin（左右は 1 行の文字数が決まっていれば中央そろえ）
+    marginTop: null,
+    marginBottom: null,
+    marginLeft: null,
+    marginRight: null,
     lineSpread: 1.0,
     header: '',
     headerStyle: 'running', // running: 各ページ上部に小さく / title: 1 ページ目の上に大きく
@@ -62,6 +67,8 @@ export function defaultLayout() {
       gap: 3, // 番号とタイトル／本文の間（mm）
       boxRule: 'thin', // 枠囲みの線: thin | thick
       align: 'left', // 本文の上に置くときの位置: left | center
+      outdent: 0, // 番号を本文の左端より外（余白側）に出す量（mm）。「直後に本文」のとき
+      boxSize: 0, // 枠囲みの番号の枠の大きさ（mm、正方形）。0 は文字に合わせる
     },
     titleBlock: true, // プリントの表題（タイトル・氏名欄）を出す
     bodyPt: 0, // 本文の文字サイズ（pt。0 は「設定」の文字サイズ）
@@ -89,6 +96,7 @@ export function defaultLayout() {
       wrap: 'hang', // hang: 2 行目以降を本文にそろえる / left: 左端に戻す
       wrapIndent: 0, // left のとき、2 行目以降の字下げ（mm）
     },
+    letterSpace: 0, // 字間（全角 1 字に対する割合。例: 0.1）
     parIndent: false, // 段落の行頭を 1 字下げる
     parSkip: 1.5, // 段落と段落の間（mm）
     displayAlign: 'center', // 別行立ての式: center | left
@@ -171,8 +179,10 @@ export function headNumberHtml(h, n) {
   switch (h.style) {
     case 'plain':
       return `${escH(h.label || '')}${h.label ? '&thinsp;' : ''}${n}`;
-    case 'box':
-      return `<span class="hn-box${h.boxRule === 'thick' ? ' thick' : ''}">${n}</span>`;
+    case 'box': {
+      const s = Number(h.boxSize) > 0 ? ` style="width:${Number(h.boxSize)}mm;height:${Number(h.boxSize)}mm"` : '';
+      return `<span class="hn-box${h.boxRule === 'thick' ? ' thick' : ''}${s ? ' sized' : ''}"${s}>${n}</span>`;
+    }
     case 'daiSpaced':
       return `第　${n}　問`;
     case 'dot':
@@ -209,6 +219,18 @@ export function paperSize(l) {
   return l.landscape ? { w: p.h, h: p.w } : { w: p.w, h: p.h };
 }
 
+/** 上下左右の余白（mm）。left/right は個別指定がなければ null（中央そろえ・一律の余白に任せる） */
+export function pageMargins(l) {
+  const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+  const mg = Number(l.margin);
+  return {
+    top: num(l.marginTop) ?? mg,
+    bottom: num(l.marginBottom) ?? mg,
+    left: num(l.marginLeft),
+    right: num(l.marginRight),
+  };
+}
+
 /** プリアンブルに入れるレイアウト関係の定義 */
 export function texLayoutPreamble(l, docPt = 11) {
   const { w, h } = paperSize(l);
@@ -216,14 +238,26 @@ export function texLayoutPreamble(l, docPt = 11) {
   const L = [];
   const pt = bodyPt(l, docPt);
   const chars = Number(l.charsPerLine) || 0;
-  // 1 行の文字数が決まっていれば本文幅＝文字数×文字サイズ（全角 1 字＝1zw）にして左右中央に置く
-  const geo = chars > 0 ? `textwidth=${(chars * pt).toFixed(2)}pt,hcentering,vmargin=${Number(l.margin)}mm` : `margin=${Number(l.margin)}mm`;
-  L.push(`\\usepackage[paperwidth=${w}mm,paperheight=${h}mm,${geo}]{geometry}`);
+  const m = pageMargins(l);
+  // 左右：個別指定 > 1 行の文字数（中央そろえ）> 一律の余白
+  const hgeo =
+    m.left != null && m.right != null
+      ? `left=${m.left}mm,right=${m.right}mm`
+      : chars > 0
+        ? `textwidth=${(chars * pt).toFixed(2)}pt,hcentering`
+        : `hmargin=${Number(l.margin)}mm`;
+  L.push(`\\usepackage[paperwidth=${w}mm,paperheight=${h}mm,${hgeo},top=${m.top}mm,bottom=${m.bottom}mm]{geometry}`);
   if (Number(l.lineSpread) !== 1) L.push(`\\linespread{${Number(l.lineSpread).toFixed(2)}}`);
   if (Number(l.bodyPt) > 0 || Number(l.lineHeight) > 0) {
     const lh = Number(l.lineHeight) > 0 ? Number(l.lineHeight) : 1.6;
     L.push(`\\AtBeginDocument{\\fontsize{${pt}pt}{${(pt * lh).toFixed(2)}pt}\\selectfont}`);
   }
+  // 字間（和文の文字と文字の間を広げる。全角 1 字に対する割合）
+  if (Number(l.letterSpace) > 0) {
+    L.push(`\\AtBeginDocument{\\ltjsetparameter{kanjiskip={${Number(l.letterSpace)}\\zw plus 0.5pt minus 0.5pt}}}`);
+  }
+  // 本文の全角 1 字の幅（大きな番号の枠を本文の行の中央にそろえるのに使う）
+  L.push('\\newlength{\\lpebodyzw}\\AtBeginDocument{\\setlength{\\lpebodyzw}{1\\zw}}');
   L.push('\\newcommand{\\lpepparen}[1]{\\ifcase\\value{#1}\\or ⑴\\or ⑵\\or ⑶\\or ⑷\\or ⑸\\or ⑹\\or ⑺\\or ⑻\\or ⑼\\or ⑽\\fi}');
   L.push(`\\definecolor{lpehead}{HTML}{${hex(head.color)}}`);
   const fam = head.font === 'mincho' ? '\\rmfamily\\mcfamily' : '\\sffamily\\gtfamily';
@@ -237,7 +271,11 @@ export function texLayoutPreamble(l, docPt = 11) {
     plain: `${head.label ? `${head.label}\\,` : ''}#1`,
     number: '#1',
     // 入試の大問番号のような正方形に近い枠（高さを支柱で 1.25em に）
-    box: `{\\setlength{\\fboxsep}{1pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\fcolorbox{lpehead}{white}{\\makebox[\\lpeboxw][c]{\\rule[-0.3em]{0pt}{1.25em}#1}}}`,
+    box:
+      Number(head.boxSize) > 0
+        ? // 大きさを指定した正方形の枠。行の高さには影響させず、枠の中心を本文 1 行目の中心にそろえる
+          `{\\setlength{\\fboxsep}{0pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\raisebox{\\dimexpr0.38\\lpebodyzw-${Number(head.boxSize) / 2}mm\\relax}[0pt][0pt]{\\fcolorbox{lpehead}{white}{\\vbox to \\dimexpr${Number(head.boxSize)}mm-2\\fboxrule\\relax{\\vss\\hbox to \\dimexpr${Number(head.boxSize)}mm-2\\fboxrule\\relax{\\hss#1\\hss}\\vss}}}}`
+        : `{\\setlength{\\fboxsep}{1pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\fcolorbox{lpehead}{white}{\\makebox[\\lpeboxw][c]{\\rule[-0.3em]{0pt}{1.25em}#1}}}`,
     daiSpaced: '第\\hspace{1\\zw}#1\\hspace{1\\zw}問',
     dot: '#1.',
     bracketSp: '〔\\ #1\\ 〕',
@@ -263,11 +301,14 @@ export function texLayoutPreamble(l, docPt = 11) {
   const left = s.wrap === 'left';
   // left のときは折り返し行を大問本文の左端（0）に戻し、1 行目だけ「字下げ＋番号＋空き」だけ下げる
   const wi = Number(s.wrapIndent) || 0;
-  L.push(`\\setlength{\\leftmargini}{${left ? wi : Number(s.indent)}mm}\\setlength{\\labelsep}{${Number(s.sep)}mm}`);
+  // 本文自体を字下げ用のリストに入れる配置では小問は 2 段目のリストになるので、2・3 段目にも同じ字下げを設定する
+  const lm = `${left ? wi : Number(s.indent)}mm`;
+  L.push(`\\setlength{\\leftmargini}{${lm}}\\setlength{\\leftmarginii}{${lm}}\\setlength{\\leftmarginiii}{${lm}}\\setlength{\\labelsep}{${Number(s.sep)}mm}`);
   L.push('\\makeatletter');
   L.push(
     // 番号の幅は実際の幅に（既定の「字下げ−空き」だと字下げ 0 のとき負になり、番号の位置が崩れる）
-    `\\newcommand{\\lpe@subfix}{\\setlength{\\itemsep}{${Number(s.gap)}mm}\\settowidth{\\labelwidth}{\\csname label\\@enumctr\\endcsname}${
+    // 外側のリスト（ぶら下げの大問）の「番号の後の空き」を引き継がないよう、小問用の値を設定し直す
+    `\\newcommand{\\lpe@subfix}{\\setlength{\\itemsep}{${Number(s.gap)}mm}\\setlength{\\labelsep}{${Number(s.sep)}mm}\\settowidth{\\labelwidth}{\\setcounter{\\@enumctr}{1}\\csname label\\@enumctr\\endcsname\\setcounter{\\@enumctr}{0}}${
       left ? `\\setlength{\\itemindent}{\\dimexpr${Number(s.indent) - wi}mm+\\labelwidth+\\labelsep\\relax}` : ''
     }}`
   );
@@ -351,8 +392,9 @@ export function texProblemOpen(l, pl, n, title, stars, isFirst, points) {
   const ptsAfter = pts && (l.pointsStyle === 'after' || (l.pointsStyle === 'right' && head.position !== 'above')) ? `${gap}${pts}` : '';
   const close = (inner) => [...inner, ...(frame ? ['\\end{minipage}}\\endgroup'] : [])];
   if (head.position === 'inline') {
-    // 番号の直後から本文が始まり、2 行目以降は左端に戻る
-    L.push(`\\noindent{\\lpeheadfont\\lpenum{${n}}}${t}${ptsAfter}${gap}\\ignorespaces`);
+    // 番号の直後から本文が始まり、2 行目以降は左端に戻る。outdent があれば番号を余白側に張り出す
+    const od = Number(head.outdent) > 0 ? `\\hspace*{-${Number(head.outdent)}mm}` : '';
+    L.push(`\\noindent${od}{\\lpeheadfont\\lpenum{${n}}}${t}${ptsAfter}${gap}\\ignorespaces`);
     return { open: L, close: close([]) };
   }
   if (head.position === 'hanging') {
@@ -361,7 +403,8 @@ export function texProblemOpen(l, pl, n, title, stars, isFirst, points) {
       `\\settowidth{\\lpehangw}{\\lpeheadfont\\lpenum{${n}}}\\addtolength{\\lpehangw}{${gapMm}mm}\\ifdim\\lpehangw<${Number(l.bodyIndent)}mm\\setlength{\\lpehangw}{${Number(l.bodyIndent)}mm}\\fi`
     );
     L.push(
-      `\\begin{list}{}{\\setlength{\\leftmargin}{\\lpehangw}\\setlength{\\labelwidth}{\\dimexpr\\lpehangw-${gapMm}mm\\relax}\\setlength{\\labelsep}{${gapMm}mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{\\parskip}}`
+      // 番号は左寄せ（字下げ幅を広げても番号は左端のまま、本文だけが右に寄る）
+      `\\begin{list}{}{\\setlength{\\leftmargin}{\\lpehangw}\\setlength{\\labelwidth}{\\dimexpr\\lpehangw-${gapMm}mm\\relax}\\setlength{\\labelsep}{${gapMm}mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{\\parskip}\\def\\makelabel#1{#1\\hfil}}`
     );
     const headLine = t || st || ptsAfter ? `${t ? `{\\lpeheadfont ${title}}` : ''}${ptsAfter}${st}\\par\\vspace{${Number(l.spaceAfterHead)}mm}` : '';
     L.push(`\\item[{\\lpeheadfont\\lpenum{${n}}}]${headLine}`);

@@ -117,6 +117,7 @@ export function initLayoutPanel(deps) {
     el.addEventListener('input', () => {
       let v = el.type === 'checkbox' ? el.checked : el.value;
       if (el.type === 'range') v = Number(v);
+      else if (el.type === 'number') v = v === '' ? null : Number(v);
       update(path, v, isMeta);
     });
   }

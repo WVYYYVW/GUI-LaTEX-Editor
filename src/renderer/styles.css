@@ -416,3 +416,7 @@ input.mid { width: 110px; }
 .page.parindent .sh-body li, .page.parindent .sh-body .katex-display { text-indent: 0; }
 .hn-box { display: inline-flex; align-items: center; justify-content: center; min-width: 1.3em; height: 1.35em; line-height: 1; padding: 0 0.1em; vertical-align: -0.25em; }
 .sh-titlehead { text-align: center; font-size: 1.44em; font-weight: 700; margin-bottom: 6mm; }
+/* 番号の枠の大きさ指定・字間 */
+.hn-box.sized { min-width: 0; padding: 0; box-sizing: border-box; vertical-align: middle; }
+.page .sh-body { letter-spacing: var(--letter-space, normal); }
+.ld-margins input { width: 72px; }

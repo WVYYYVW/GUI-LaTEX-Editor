@@ -129,6 +129,17 @@ test('大学テーマはすべて TeX を生成できる', () => {
   }
 });
 
+test('上下左右の余白・番号の張り出し・枠の大きさを TeX に反映する', () => {
+  const doc = newDocument(true);
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-tohoku'));
+  const tex = buildTex(doc);
+  assert.match(tex, /left=27\.6mm,right=23\.8mm,top=27\.4mm,bottom=22mm/);
+  assert.match(tex, /\\hspace\*\{-3\.7mm\}\{\\lpeheadfont\\lpenum\{1\}\}/);
+  assert.match(tex, /\\vbox to \\dimexpr5\.6mm-2\\fboxrule/);
+  // 2 段目のリスト（字下げ用のリストの中の小問）にも小問の字下げを設定する
+  assert.match(tex, /\\setlength\{\\leftmarginii\}\{6\.8mm\}/);
+});
+
 test('句読点の統一は数式の中を変えない', () => {
   const l = { punct: 'commaPeriod' };
   assert.equal(applyPunct('a、b。$f(x)、y$', l, findMathRanges), 'a，b．$f(x)、y$');

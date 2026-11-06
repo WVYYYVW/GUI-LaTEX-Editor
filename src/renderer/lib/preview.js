@@ -1,7 +1,7 @@
 // LaTeX（問題文）→ HTML プレビュー。数式は KaTeX、文章部分はよく使う命令だけを簡易変換する。
 import katex from 'katex';
 import { findMathRanges, maskComments } from './mathRanges.js';
-import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct } from './layout.js';
+import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins } from './layout.js';
 import { findFigures, figureToSvg } from './figure.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -277,7 +277,12 @@ export function renderSheet(doc, macros, opts = {}) {
     m.columns === 2 ? 'cols-2' : '',
   ].filter(Boolean).join(' ');
   const vars = `--sub-indent:${Number(s.indent)}mm;--sub-sep:${Number(s.sep)}mm;--sub-gap:${Number(s.gap)}mm;--sub-wrap:${Number(s.wrapIndent) || 0}mm;--math-indent:${Number(l.mathIndent)}mm;--par-skip:${Number(l.parSkip)}mm`;
-  let out = `<div class="${cls}" style="width:${w}mm;padding:${l.margin}mm ${padX.toFixed(2)}mm;font-size:${pt}pt;line-height:${lineHeight.toFixed(2)};${vars}">`;
+  // 上下左右の余白（個別指定があればそれを使う。PDF と同じ考え方）
+  const pm = pageMargins(l);
+  const padL = pm.left ?? padX;
+  const padR = pm.right ?? padX;
+  const ls = Number(l.letterSpace) > 0 ? `;--letter-space:${Number(l.letterSpace)}em` : '';
+  let out = `<div class="${cls}" style="width:${w}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt;line-height:${lineHeight.toFixed(2)};${vars}${ls}">`;
   if (l.header) out += l.headerStyle === 'title' ? `<div class="sh-titlehead">${esc(l.header)}</div>` : `<div class="sh-runhead">${esc(l.header)}</div>`;
   if (l.titleBlock !== false && (m.title || m.subtitle || m.author || m.date || m.nameField)) {
     out += '<header class="sh-header">';
@@ -298,7 +303,8 @@ export function renderSheet(doc, macros, opts = {}) {
     const hanging = h.position === 'hanging';
     const gapMm = Number(h.gap ?? 3);
     // ぶら下げ幅は「字下げ設定」と「見出し番号の幅＋空き」の大きい方（PDF 側と同じ考え方）
-    const hangCol = `minmax(${Number(l.bodyIndent)}mm, max-content)`;
+    // 列の間の空き（gapMm）も字下げ幅に含める（PDF 側は「字下げ幅」と「番号の幅＋空き」の大きい方）
+    const hangCol = `minmax(${Math.max(0, Number(l.bodyIndent) - gapMm)}mm, max-content)`;
     out += `<section class="sh-problem${frame ? ' framed' : ''}${hanging ? ' hanging' : ''}${brk ? ' brk' : ''}" data-index="${i}" style="margin-top:${l.spaceBefore}mm${hanging ? `;grid-template-columns:${hangCol} 1fr;column-gap:${gapMm}mm` : ''}">`;
     const num = `<span class="sh-num" style="${headCss}${hanging ? '' : `;margin-right:${gapMm}mm`}" data-index="${i}" title="クリックでレイアウト設定">${headNumberHtml(h, n)}</span>`;
     const title = h.showTitle && p.title ? `<span class="sh-title" style="${headCss};margin-right:${gapMm}mm">${renderInline(p.title, macros)}</span>` : '';
@@ -318,7 +324,9 @@ export function renderSheet(doc, macros, opts = {}) {
         : '';
     if (h.position === 'inline') {
       // 番号の直後から本文。2 行目以降は左端に戻る
-      const fl = (x, c) => x.replace(`class="${c}"`, `class="${c} sh-float"`);
+      const od = Number(h.outdent) > 0 ? Number(h.outdent) : 0;
+      // 番号を本文の左端より外（余白側）に張り出す
+      const fl = (x, c) => x.replace(`class="${c}"`, `class="${c} sh-float"${c === 'sh-num' && od ? ` data-outdent="${od}"` : ''}`).replace(c === 'sh-num' && od ? 'style="' : '\u0000', `style="margin-left:-${od}mm;`);
       out += `<div class="sh-inline">${fl(num, 'sh-num')}${title ? fl(title, 'sh-title') : ''}${ptsAfter ? fl(ptsAfter, 'sh-points') : ''}${body}${answer}</div>${spaceEl}`;
     } else if (hanging) {
       out += `<div class="sh-hcol">${num}</div><div>${title || st || ptsAfter ? `<div class="sh-head" style="margin-bottom:${l.spaceAfterHead}mm">${title}${ptsAfter}${st}</div>` : ''}${body}${answer}${spaceEl}</div>`;

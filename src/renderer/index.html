@@ -286,7 +286,10 @@
               <div class="ld-row">
                 <label>配点の書き方（{n} が点数）<input data-l="pointsFormat" type="text" /></label>
               </div>
-              <div class="ld-slider"><span class="ld-k">番号の後の空き</span><input data-l="head.gap" type="range" min="0" max="15" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">番号の後の空き</span><input data-l="head.gap" type="range" min="0" max="15" step="0.1" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">番号の張り出し</span><input data-l="head.outdent" type="range" min="0" max="15" step="0.1" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">枠の大きさ</span><input data-l="head.boxSize" type="range" min="0" max="16" step="0.1" /><output></output><span class="unit">mm</span></div>
+              <p class="hint">張り出し：「直後に本文」のとき番号を本文の左端より外に出します。枠の大きさ：0 は文字に合わせます。</p>
             </section>
 
             <section>
@@ -344,6 +347,14 @@
                 <div class="seg" data-segm="columns"><button data-v="1">1段</button><button data-v="2">2段</button></div>
               </div>
               <div class="ld-slider"><span class="ld-k">余白</span><input data-l="margin" type="range" min="8" max="40" step="1" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-row ld-margins">
+                <label>上<input data-l="marginTop" type="number" min="0" max="80" step="0.1" placeholder="一律" /></label>
+                <label>下<input data-l="marginBottom" type="number" min="0" max="80" step="0.1" placeholder="一律" /></label>
+                <label>左<input data-l="marginLeft" type="number" min="0" max="80" step="0.1" placeholder="自動" /></label>
+                <label>右<input data-l="marginRight" type="number" min="0" max="80" step="0.1" placeholder="自動" /></label>
+              </div>
+              <p class="hint">上下左右を個別に指定できます（mm、空欄は上の「余白」）。左右は両方入れたときに有効です。</p>
+              <div class="ld-slider"><span class="ld-k">字間</span><input data-l="letterSpace" type="range" min="0" max="0.5" step="0.01" /><output></output><span class="unit">字</span></div>
               <div class="ld-slider"><span class="ld-k">本文の文字</span><input data-l="bodyPt" type="range" min="0" max="14" step="0.5" /><output></output><span class="unit">pt</span></div>
               <p class="hint">0 のときは「設定」の文字サイズ（10/11/12pt）を使います。</p>
               <div class="ld-slider"><span class="ld-k">行送り</span><input data-l="lineHeight" type="range" min="0" max="2.5" step="0.05" /><output></output><span class="unit">倍</span></div>
