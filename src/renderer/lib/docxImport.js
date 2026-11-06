@@ -48,7 +48,7 @@ const MATH_SYM = {
   '⋯': '\\cdots ', '…': '\\ldots ', '⋮': '\\vdots ', '⋱': '\\ddots ', '∞': '\\infty ', '∂': '\\partial ', '∇': '\\nabla ',
   '→': '\\to ', '←': '\\leftarrow ', '↔': '\\leftrightarrow ', '⇒': '\\Rightarrow ', '⇐': '\\Leftarrow ', '⇔': '\\Leftrightarrow ', '↦': '\\mapsto ',
   '∈': '\\in ', '∋': '\\ni ', '∉': '\\notin ', '⊂': '\\subset ', '⊃': '\\supset ', '⊆': '\\subseteq ', '⊇': '\\supseteq ', '∪': '\\cup ', '∩': '\\cap ',
-  '∅': '\\emptyset ', '∀': '\\forall ', '∃': '\\exists ', '¬': '\\neg ', '∧': '\\land ', '∨': '\\lor ', '∴': '\\therefore ', '∵': '\\because ',
+  '⋃': '\\cup ', '⋂': '\\cap ', '∅': '\\emptyset ', '∀': '\\forall ', '∃': '\\exists ', '¬': '\\neg ', '∧': '\\land ', '∨': '\\lor ', '∴': '\\therefore ', '∵': '\\because ',
   '∘': '\\circ ', '∠': '\\angle ', '△': '\\triangle ', '⊥': '\\perp ', '∥': '\\parallel ', '°': '^{\\circ}', '′': "'", '″': "''", '−': '-', '∗': '*', '∣': '\\mid ',
   '∫': '\\int ', '∬': '\\iint ', '∮': '\\oint ', '∑': '\\sum ', '∏': '\\prod ', '√': '\\surd ',
   'ℝ': '\\mathbb{R}', 'ℕ': '\\mathbb{N}', 'ℤ': '\\mathbb{Z}', 'ℚ': '\\mathbb{Q}', 'ℂ': '\\mathbb{C}', 'ℯ': 'e', 'ⅈ': 'i', 'ℎ': 'h',
@@ -423,6 +423,10 @@ function groupItems(paras) {
         }
         out.push(`${pad()}\\item[(${lab})] ${rest}`);
       }
+    } else if (stack.length === 1 && stack[0] === 'other' && p.trim() && !/^\s*(\$[^$]*\$\s*)+[．。,，]?\s*$|^\s*\\\[/.test(p)) {
+      // 条件 (i)(ii)… の並びの後の文章は地の文（数式だけの行は条件の続き）
+      close(0);
+      out.push(p);
     } else if (stack.length && p.trim() && !/(よ|せ|か|い)[．。.]\s*\$?\s*$/.test(out[out.length - 1] || '')) {
       // 小問の続き（数式など）は字下げして同じ項目に
       out.push(p.split('\n').map((l) => `${pad()}  ${l}`).join('\n'));
@@ -438,8 +442,11 @@ function groupItems(paras) {
   // 段落の間は空行、リストの中は詰める
   let s = '';
   for (const line of out) {
-    const inList = /^\s*(\\item|\\end\{enumerate\}|\\begin\{enumerate\})/.test(line) || /^\s{2,}/.test(line);
-    s += s ? (inList ? '\n' : '\n\n') + line : line;
+    const listCmd = /^\s*(\\item|\\end\{enumerate\}|\\begin\{enumerate\})/.test(line);
+    // 小問の中の続きの段落（Word では別の行）は改段落にして、行がつながらないように
+    const cont = !listCmd && /^\s{2,}/.test(line);
+    s += s ? (listCmd ? '\n' : '\n\n') + line : line;
+    if (cont) continue;
   }
   return s;
 }
@@ -466,7 +473,7 @@ export function docxToProblems(xml, opts = {}) {
     problems.push(cur);
   };
   // 「C***」「B**∘」のような難易度表記（ランク・★の数・印）
-  const DIFF = /^([A-Z])?(\*+|★+)(∘|○|◦)?$/;
+  const DIFF = /^([A-Z])?(\*+|★+)(∘|○|◦|\\circ)?$/;
   const applyDiff = (p, m) => {
     if (m[1]) p.tags.push(`ランク${m[1]}`);
     p.difficulty = Math.min(5, m[2].length);
