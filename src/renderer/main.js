@@ -12,6 +12,9 @@ import { clipboardToLatex, aiTextToLatex, htmlHasTex } from './lib/smartPaste.js
 import { latexToMathML } from './lib/wordExport.js';
 import { initLayoutPanel, fitPages, enableSpaceDrag } from './layoutPanel.js';
 import { paperSize, normalizeLayout } from './lib/layout.js';
+import { initFigureDialog } from './figureDialog.js';
+import { figureBlock, findFigures } from './lib/figure.js';
+import { setImageResolver } from './lib/preview.js';
 
 const api = window.api;
 const $ = (s) => document.querySelector(s);
@@ -92,6 +95,9 @@ const editor = createEditor($('#cm-host'), {
   keys: [
     { key: 'Mod-e', run: () => (openMathEditor(), true) },
     { key: 'Mod-Shift-v', run: () => (openPasteDialog(), true) },
+    { key: 'Mod-b', run: () => (applyFormat('bold'), true) },
+    { key: 'Mod-i', run: () => (applyFormat('italic'), true) },
+    { key: 'Mod-u', run: () => (applyFormat('underline'), true) },
   ],
 });
 
@@ -236,7 +242,16 @@ function syncProblemLayout() {
   $('#pl-frame').value = pl.frame === true ? 'on' : pl.frame === false ? 'off' : 'inherit';
   if (document.activeElement !== $('#pl-space')) $('#pl-space').value = pl.answerSpace ?? '';
   $('#pl-space').placeholder = `全体 ${state.doc.meta.spaceAfter}`;
+  if (document.activeElement !== $('#pl-points')) $('#pl-points').value = p.points ?? '';
 }
+$('#pl-points').addEventListener('input', (e) => {
+  const p = currentProblem();
+  if (!p) return;
+  const v = e.target.value.trim();
+  p.points = v === '' ? null : Math.max(0, Number(v) || 0);
+  setDirty(true);
+  renderPreview();
+});
 function updateProblemLayout(patch) {
   const p = currentProblem();
   if (!p) return;
@@ -403,7 +418,7 @@ function renderPalette() {
     const b = document.createElement('button');
     b.type = 'button';
     b.title = item.title ? `${item.title}\n${item.insert.replace(/‸/g, '')}` : item.insert.replace(/‸/g, '');
-    if (item.kind === 'text') {
+    if (item.kind === 'text' || item.kind === 'action') {
       b.textContent = item.text;
       b.classList.add('text-item');
     } else {
@@ -423,6 +438,7 @@ $('#toggle-palette').addEventListener('click', () => {
 
 function insertSnippet(item) {
   if (!currentProblem()) return;
+  if (item.kind === 'action') return actions[item.action]?.();
   const text = editor.getText();
   const sel = editor.getSelection();
   const selected = text.slice(sel.from, sel.to);
@@ -432,6 +448,44 @@ function insertSnippet(item) {
   const insert = snippet.replace('‸', selected);
   editor.replace(sel.from, sel.to, insert, sel.from + caret + selected.length);
 }
+
+// 書式ボタン：選択範囲を命令で囲む（選択がなければカーソル位置に空の命令を入れる）
+function wrapSelection(before, after) {
+  if (!currentProblem()) return;
+  const sel = editor.getSelection();
+  const text = editor.getText().slice(sel.from, sel.to);
+  const start = sel.from + before.length;
+  editor.replaceSelect(sel.from, sel.to, before + text + after, start, start + text.length);
+}
+$('#fmt-bar').addEventListener('mousedown', (e) => {
+  if (e.target.closest('button')) e.preventDefault(); // エディタの選択を保つ
+});
+/** 書式を付ける。選択が数式の中なら数式用の命令を使う（太字 → \bm、斜体 → \mathit） */
+function applyFormat(kind, arg) {
+  if (!currentProblem()) return;
+  const text = editor.getText();
+  const sel = editor.getSelection();
+  const r = rangeAt(text, sel.from);
+  const inMath = !!r && sel.to <= r.innerTo && sel.from >= r.innerFrom;
+  if (kind === 'bold') wrapSelection(inMath ? '\\bm{' : '\\textbf{', '}');
+  else if (kind === 'italic') wrapSelection(inMath ? '\\mathit{' : '\\textit{', '}');
+  else if (kind === 'underline') wrapSelection('\\underline{', '}');
+  else if (kind === 'color') wrapSelection(`\\lpecolor{${$('#fmt-color').value.slice(1).toUpperCase()}}{`, '}');
+  else if (kind === 'size') {
+    if (inMath) return toast('数式の中では文字サイズを変えられません（数式の外を選んでください）', 'error');
+    wrapSelection(`{\\${arg} `, '}');
+  }
+}
+$('#fmt-bar').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-fmt]');
+  if (b) applyFormat(b.dataset.fmt);
+});
+$('#fmt-size').addEventListener('change', (e) => {
+  const v = e.target.value;
+  e.target.value = '';
+  if (v) applyFormat('size', v);
+  editor.focus();
+});
 
 function insertText(s) {
   const sel = editor.getSelection();
@@ -841,6 +895,61 @@ $('#settings-dialog').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') $('#settings-dialog').classList.add('hidden');
 });
 
+// ---------------- 図・グラフ ----------------
+const imageCache = new Map(); // file → dataURL | null（読み込み中は 'loading'）
+function resolveImage(file) {
+  if (!file) return null;
+  const key = `${state.filePath || ''}|${file}`;
+  const v = imageCache.get(key);
+  if (v === undefined) {
+    imageCache.set(key, 'loading');
+    api
+      .readImage({ file, projectPath: state.filePath })
+      .then((url) => imageCache.set(key, url || null))
+      .catch(() => imageCache.set(key, null))
+      .finally(() => {
+        renderPreview();
+        figureDialog.refresh();
+      });
+    return null;
+  }
+  return v === 'loading' ? null : v;
+}
+setImageResolver(resolveImage);
+
+const figureDialog = initFigureDialog({
+  chooseImage: () => api.chooseImage({ projectPath: state.filePath }),
+  resolveImage,
+  toast,
+});
+
+/** 図を挿入、またはカーソル位置／指定位置の図を編集 */
+function openFigure(target) {
+  if (!currentProblem()) return;
+  const text = editor.getText();
+  const pos = editor.getSelection().from;
+  const fig = target || findFigures(text).find((f) => pos >= f.from && pos <= f.to);
+  figureDialog.open(fig?.spec, (spec) => {
+    const block = figureBlock(spec);
+    if (fig) editor.replace(fig.from, fig.to, block);
+    else {
+      const sel = editor.getSelection();
+      const before = text.slice(0, sel.from);
+      const lead = before && !before.endsWith('\n') ? '\n' : '';
+      editor.replace(sel.from, sel.to, `${lead}${block}\n`);
+    }
+    toast(fig ? '図を更新しました' : '図を挿入しました');
+  });
+}
+$('#preview').addEventListener('dblclick', (e) => {
+  const el = e.target.closest('.pv-fig[data-field]');
+  if (!el) return;
+  const field = el.dataset.field;
+  if (state.field !== field) selectProblem(state.selectedId, field);
+  const fig = findFigures(currentProblem()[field]).find((f) => f.from === Number(el.dataset.from));
+  if (fig) openFigure(fig);
+});
+
 // ---------------- レイアウト / テーマ ----------------
 const layoutPanel = initLayoutPanel({
   getDoc: () => state.doc,
@@ -883,6 +992,7 @@ const actions = {
   'print-pdf': printPdf,
   settings: openSettings,
   layout: () => layoutPanel.open(),
+  figure: () => openFigure(),
   'add-problem': addProblem,
   'duplicate-problem': duplicateProblem,
   'delete-problem': deleteProblem,

@@ -10,18 +10,35 @@ export const HEAD_STYLES = [
   { id: 'bracket', name: '〔1〕' },
   { id: 'square', name: '[1]' },
   { id: 'dai', name: '第1問' },
+  { id: 'daiSpaced', name: '第 1 問' },
+  { id: 'dot', name: '1.' },
+  { id: 'bracketSp', name: '〔 1 〕' },
   { id: 'roman', name: 'I, II' },
 ];
 
 export const SUB_LABELS = [
   { id: 'paren', name: '(1)' },
+  { id: 'pparen', name: '⑴' },
   { id: 'decimal', name: '1.' },
   { id: 'roman', name: '(i)' },
   { id: 'alpha', name: '(a)' },
   { id: 'kata', name: '(ア)' },
 ];
 
-export const PAPERS = { a4: { name: 'A4', w: 210, h: 297 }, b4: { name: 'B4', w: 257, h: 364 }, a3: { name: 'A3', w: 297, h: 420 } };
+export const PAPERS = {
+  a4: { name: 'A4', w: 210, h: 297 },
+  b5: { name: 'B5', w: 182, h: 257 },
+  b4: { name: 'B4', w: 257, h: 364 },
+  a3: { name: 'A3', w: 297, h: 420 },
+};
+
+/** 句読点の統一（数式の外の文章だけに適用） */
+export const PUNCT = {
+  asis: null,
+  commaMaru: [['、', '，']], // 「，。」
+  commaPeriod: [['、', '，'], ['。', '．']], // 「，．」
+  tenMaru: [['，', '、'], ['．', '。']], // 「、。」
+};
 
 export function defaultLayout() {
   return {
@@ -31,6 +48,7 @@ export function defaultLayout() {
     margin: 20,
     lineSpread: 1.0,
     header: '',
+    headerStyle: 'running', // running: 各ページ上部に小さく / title: 1 ページ目の上に大きく
     pageNumber: 'plain', // plain | dash | none
     head: {
       style: 'plain',
@@ -39,9 +57,22 @@ export function defaultLayout() {
       size: 13,
       bold: true,
       color: '#000000',
-      position: 'above', // above | hanging
+      position: 'above', // above（本文の上）| hanging（左にぶら下げ）| inline（番号の直後に本文）
       showTitle: true,
+      gap: 3, // 番号とタイトル／本文の間（mm）
+      boxRule: 'thin', // 枠囲みの線: thin | thick
+      align: 'left', // 本文の上に置くときの位置: left | center
     },
+    titleBlock: true, // プリントの表題（タイトル・氏名欄）を出す
+    bodyPt: 0, // 本文の文字サイズ（pt。0 は「設定」の文字サイズ）
+    lineHeight: 0, // 行送り（文字サイズの何倍か。0 は既定）
+    charsPerLine: 0, // 1 行の文字数（0 は余白から自動）
+    punct: 'asis', // 句読点の統一: asis | commaMaru | commaPeriod | tenMaru
+    pointsStyle: 'none', // 配点: none | right（見出し行の右端）| after（番号の後）| bodyEnd（前文の最後）
+    pointsFormat: '({n}点)',
+    afterEach: 'none', // 大問の後のページ: none | blank（白紙）| draft（下書き用紙）
+    draftText: '(下書き用紙)',
+    endText: '', // 問題の最後に入れる一文（例: 問題は，このページで終わりである。）
     spaceBefore: 8,
     spaceAfterHead: 2,
     bodyIndent: 0,
@@ -49,13 +80,26 @@ export function defaultLayout() {
     rule: false,
     newPageEach: false,
     subLabel: 'paren',
+    // 小問（enumerate）の細部
+    sub: {
+      paren: 'half', // half: (1)  full: （1）
+      indent: 8, // 小問の本文の左端（大問本文の左端から, mm）
+      sep: 2, // 番号と本文の間（mm）
+      gap: 0, // 小問どうしの間（mm）
+      wrap: 'hang', // hang: 2 行目以降を本文にそろえる / left: 左端に戻す
+      wrapIndent: 0, // left のとき、2 行目以降の字下げ（mm）
+    },
+    parIndent: false, // 段落の行頭を 1 字下げる
+    parSkip: 1.5, // 段落と段落の間（mm）
+    displayAlign: 'center', // 別行立ての式: center | left
+    mathIndent: 10, // 左寄せのときの字下げ（mm）
   };
 }
 
 /** 保存データを既定値で補完する */
 export function normalizeLayout(l = {}) {
   const d = defaultLayout();
-  return { ...d, ...l, head: { ...d.head, ...(l.head || {}) } };
+  return { ...d, ...l, head: { ...d.head, ...(l.head || {}) }, sub: { ...d.sub, ...(l.sub || {}) } };
 }
 
 /** 問題ごとの上書き設定 */
@@ -114,8 +158,9 @@ export const BASE_THEMES = [
 export function applyTheme(meta, theme) {
   const base = defaultLayout();
   const t = theme.layout || {};
-  meta.layout = { ...base, ...t, head: { ...base.head, ...(t.head || {}) }, themeId: theme.id };
-  if (theme.meta) Object.assign(meta, theme.meta);
+  meta.layout = { ...base, ...t, head: { ...base.head, ...(t.head || {}) }, sub: { ...base.sub, ...(t.sub || {}) }, themeId: theme.id };
+  // テーマが触る文書設定は、前のテーマの値が残らないよう既定に戻してから適用する
+  Object.assign(meta, { spaceAfter: 0, columns: 1, nameField: false, answerMode: 'end', showDifficulty: true }, theme.meta || {});
 }
 
 // ---------------- HTML ----------------
@@ -127,7 +172,13 @@ export function headNumberHtml(h, n) {
     case 'plain':
       return `${escH(h.label || '')}${h.label ? '&thinsp;' : ''}${n}`;
     case 'box':
-      return `<span class="hn-box">${n}</span>`;
+      return `<span class="hn-box${h.boxRule === 'thick' ? ' thick' : ''}">${n}</span>`;
+    case 'daiSpaced':
+      return `第　${n}　問`;
+    case 'dot':
+      return `${n}.`;
+    case 'bracketSp':
+      return `〔&nbsp;${n}&nbsp;〕`;
     case 'boxFilled':
       return `<span class="hn-boxf" style="background:${escH(h.color)}">${n}</span>`;
     case 'circle':
@@ -159,24 +210,37 @@ export function paperSize(l) {
 }
 
 /** プリアンブルに入れるレイアウト関係の定義 */
-export function texLayoutPreamble(l) {
+export function texLayoutPreamble(l, docPt = 11) {
   const { w, h } = paperSize(l);
   const head = l.head;
   const L = [];
-  L.push(`\\usepackage[paperwidth=${w}mm,paperheight=${h}mm,margin=${Number(l.margin)}mm]{geometry}`);
+  const pt = bodyPt(l, docPt);
+  const chars = Number(l.charsPerLine) || 0;
+  // 1 行の文字数が決まっていれば本文幅＝文字数×文字サイズ（全角 1 字＝1zw）にして左右中央に置く
+  const geo = chars > 0 ? `textwidth=${(chars * pt).toFixed(2)}pt,hcentering,vmargin=${Number(l.margin)}mm` : `margin=${Number(l.margin)}mm`;
+  L.push(`\\usepackage[paperwidth=${w}mm,paperheight=${h}mm,${geo}]{geometry}`);
   if (Number(l.lineSpread) !== 1) L.push(`\\linespread{${Number(l.lineSpread).toFixed(2)}}`);
+  if (Number(l.bodyPt) > 0 || Number(l.lineHeight) > 0) {
+    const lh = Number(l.lineHeight) > 0 ? Number(l.lineHeight) : 1.6;
+    L.push(`\\AtBeginDocument{\\fontsize{${pt}pt}{${(pt * lh).toFixed(2)}pt}\\selectfont}`);
+  }
+  L.push('\\newcommand{\\lpepparen}[1]{\\ifcase\\value{#1}\\or ⑴\\or ⑵\\or ⑶\\or ⑷\\or ⑸\\or ⑹\\or ⑺\\or ⑻\\or ⑼\\or ⑽\\fi}');
   L.push(`\\definecolor{lpehead}{HTML}{${hex(head.color)}}`);
   const fam = head.font === 'mincho' ? '\\rmfamily\\mcfamily' : '\\sffamily\\gtfamily';
   const sz = Number(head.size) || 13;
   L.push(
     `\\newcommand{\\lpeheadfont}{${fam}${head.bold ? '\\bfseries' : ''}\\fontsize{${sz}pt}{${(sz * 1.3).toFixed(1)}pt}\\selectfont\\color{lpehead}}`
   );
-  L.push('\\newlength{\\lpeboxw}\\settowidth{\\lpeboxw}{\\lpeheadfont 00}');
+  L.push('\\newlength{\\lpeboxw}\\settowidth{\\lpeboxw}{\\lpeheadfont 00}\\begingroup\\lpeheadfont\\ifdim\\lpeboxw<1.2em\\global\\lpeboxw=1.2em\\fi\\endgroup');
   // 大問番号
   const num = {
     plain: `${head.label ? `${head.label}\\,` : ''}#1`,
     number: '#1',
-    box: '{\\setlength{\\fboxsep}{1.5pt}\\setlength{\\fboxrule}{0.6pt}\\fcolorbox{lpehead}{white}{\\makebox[\\lpeboxw][c]{#1}}}',
+    // 入試の大問番号のような正方形に近い枠（高さを支柱で 1.25em に）
+    box: `{\\setlength{\\fboxsep}{1pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\fcolorbox{lpehead}{white}{\\makebox[\\lpeboxw][c]{\\rule[-0.3em]{0pt}{1.25em}#1}}}`,
+    daiSpaced: '第\\hspace{1\\zw}#1\\hspace{1\\zw}問',
+    dot: '#1.',
+    bracketSp: '〔\\ #1\\ 〕',
     boxFilled: '{\\setlength{\\fboxsep}{1.5pt}\\colorbox{lpehead}{\\makebox[\\lpeboxw][c]{\\color{white}#1}}}',
     circle:
       '\\ifdefined\\tikz\\tikz[baseline=(lpec.base)]\\node[draw=lpehead,circle,inner sep=0pt,minimum size=1.45em](lpec){#1};\\else\\textcircled{#1}\\fi',
@@ -185,15 +249,34 @@ export function texLayoutPreamble(l) {
     dai: '第#1問',
     roman: '\\Roman{lpetmp}',
   }[head.style] || '#1';
-  L.push('\\newcounter{lpetmp}');
+  L.push('\\newcounter{lpetmp}\\newlength{\\lpehangw}');
   L.push(`\\newcommand{\\lpenum}[1]{\\setcounter{lpetmp}{#1}${num}}`);
   // 本文の字下げ
   L.push(
     `\\newenvironment{lpebody}{\\begin{list}{}{\\setlength{\\leftmargin}{${Number(l.bodyIndent)}mm}\\setlength{\\rightmargin}{0pt}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\itemsep}{0pt}\\setlength{\\parsep}{\\parskip}}\\item\\relax}{\\end{list}}`
   );
+  // 段落の字下げ・別行立ての式
+  L.push(`\\setlength{\\parindent}{${l.parIndent ? '1\\zw' : '0pt'}}\\setlength{\\parskip}{${Number(l.parSkip)}mm}`);
+  if (l.displayAlign === 'left') L.push(`\\setlength{\\mathindent}{${Number(l.mathIndent)}mm}`);
+  // 小問の字下げ・番号後の空き・間隔（enumitem が無い場合の設定。ある場合は texExport 側で \setlist）
+  const s = l.sub;
+  const left = s.wrap === 'left';
+  // left のときは折り返し行を大問本文の左端（0）に戻し、1 行目だけ「字下げ＋番号＋空き」だけ下げる
+  const wi = Number(s.wrapIndent) || 0;
+  L.push(`\\setlength{\\leftmargini}{${left ? wi : Number(s.indent)}mm}\\setlength{\\labelsep}{${Number(s.sep)}mm}`);
+  L.push('\\makeatletter');
+  L.push(
+    // 番号の幅は実際の幅に（既定の「字下げ−空き」だと字下げ 0 のとき負になり、番号の位置が崩れる）
+    `\\newcommand{\\lpe@subfix}{\\setlength{\\itemsep}{${Number(s.gap)}mm}\\settowidth{\\labelwidth}{\\csname label\\@enumctr\\endcsname}${
+      left ? `\\setlength{\\itemindent}{\\dimexpr${Number(s.indent) - wi}mm+\\labelwidth+\\labelsep\\relax}` : ''
+    }}`
+  );
+  L.push('\\makeatother');
   // ページ番号・ヘッダ
-  const foot = { plain: '\\hfil\\thepage\\hfil', dash: '\\hfil--- \\thepage\\ ---\\hfil', none: '' }[l.pageNumber] ?? '\\hfil\\thepage\\hfil';
-  const headText = l.header ? `\\hfil{\\small ${l.header}}\\hfil` : '';
+  const foot =
+    { plain: '\\hfil\\thepage\\hfil', dash: '\\hfil--- \\thepage\\ ---\\hfil', endash: '\\hfil-- \\thepage\\ --\\hfil', none: '' }[l.pageNumber] ??
+    '\\hfil\\thepage\\hfil';
+  const headText = l.header && l.headerStyle !== 'title' ? `\\hfil{\\small ${l.header}}\\hfil` : '';
   L.push('\\makeatletter');
   L.push(`\\def\\ps@lpe{\\def\\@oddhead{${headText}}\\let\\@evenhead\\@oddhead\\def\\@oddfoot{${foot}}\\let\\@evenfoot\\@oddfoot}`);
   L.push('\\makeatother');
@@ -202,20 +285,55 @@ export function texLayoutPreamble(l) {
 }
 
 /** 小問番号の既定（enumerate にオプションを付けなかったとき）。enumitem の有無で書き方が違う */
+export function bodyPt(l, docPt = 11) {
+  return Number(l.bodyPt) > 0 ? Number(l.bodyPt) : docPt;
+}
+
+/** 配点の文字列 */
+export function pointsText(l, points) {
+  if (!points || l.pointsStyle === 'none') return '';
+  return String(l.pointsFormat || '({n}点)').replace('{n}', points);
+}
+
+/** 句読点の統一（数式の外だけ）。findMathRanges を渡して数式を避ける */
+export function applyPunct(text, l, findMathRanges) {
+  const rules = PUNCT[l.punct];
+  if (!rules || !text) return text;
+  const ranges = findMathRanges(text);
+  let out = '';
+  let last = 0;
+  const conv = (s) => rules.reduce((acc, [a, b]) => acc.split(a).join(b), s);
+  for (const r of ranges) {
+    out += conv(text.slice(last, r.from)) + text.slice(r.from, r.to);
+    last = r.to;
+  }
+  return out + conv(text.slice(last));
+}
+
 export function texSubLabel(l) {
   const map = {
+    pparen: ['\\lpepparen{enumi}', '\\lpepparen{enumi}'],
     paren: ['(\\arabic{enumi})', '(\\arabic*)'],
     decimal: ['\\arabic{enumi}.', '\\arabic*.'],
     roman: ['(\\roman{enumi})', '(\\roman*)'],
     alpha: ['(\\alph{enumi})', '(\\alph*)'],
     kata: ['(\\lpekata{enumi})', '(\\lpekata{enumi})'],
   };
-  const [classic, enumitem] = map[l.subLabel] || map.paren;
-  return { classic, enumitem };
+  let [classic, enumitem] = map[l.subLabel] || map.paren;
+  const full = l.sub?.paren === 'full';
+  if (full) [classic, enumitem] = [classic, enumitem].map((s) => s.replace(/^\(/, '（').replace(/\)$/, '）'));
+  // 小問の番号を [label=...] で明示したとき（enumitem が無い環境）にも括弧の形をそろえる
+  const parens = full ? ['（', '）'] : ['(', ')'];
+  const s = l.sub || {};
+  const setlist =
+    s.wrap === 'left'
+      ? `wide=${Number(s.indent)}mm,labelsep=${Number(s.sep)}mm,itemsep=${Number(s.gap)}mm`
+      : `leftmargin=${Number(s.indent)}mm,labelsep=${Number(s.sep)}mm,itemsep=${Number(s.gap)}mm`;
+  return { classic, enumitem, parens, setlist };
 }
 
 /** 大問 1 つ分の LaTeX（見出し＋本文の開始部分と終了部分） */
-export function texProblemOpen(l, pl, n, title, stars, isFirst) {
+export function texProblemOpen(l, pl, n, title, stars, isFirst, points) {
   const L = [];
   const head = l.head;
   if (!isFirst && (pl.pageBreakBefore || l.newPageEach)) L.push('\\newpage');
@@ -223,17 +341,36 @@ export function texProblemOpen(l, pl, n, title, stars, isFirst) {
   L.push(`\\par\\vspace{${Number(l.spaceBefore)}mm}`);
   const frame = pl.frame ?? l.frame;
   if (frame) L.push('\\begingroup\\setlength{\\fboxsep}{2.5mm}\\noindent\\fbox{\\begin{minipage}{\\dimexpr\\linewidth-2\\fboxsep-2\\fboxrule\\relax}');
-  const t = head.showTitle && title ? `\\quad{\\lpeheadfont ${title}}` : '';
+  const gapMm = Number(head.gap ?? 3);
+  const gap = `\\hspace{${gapMm}mm}`;
+  const t = head.showTitle && title ? `${gap}{\\lpeheadfont ${title}}` : '';
   const st = stars ? `\\hfill{\\small ${stars}}` : '';
-  if (head.position === 'hanging') {
-    const hang = Math.max(Number(l.bodyIndent), 8);
-    L.push(
-      `\\begin{list}{}{\\setlength{\\leftmargin}{${hang}mm}\\setlength{\\labelwidth}{${hang - 2}mm}\\setlength{\\labelsep}{2mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{\\parskip}}`
-    );
-    L.push(`\\item[{\\lpeheadfont\\lpenum{${n}}}]${t ? `{\\lpeheadfont ${title}}${st}\\par\\vspace{${Number(l.spaceAfterHead)}mm}` : st ? `${st}\\par` : ''}`);
-    return { open: L, close: ['\\end{list}', ...(frame ? ['\\end{minipage}}\\endgroup'] : [])] };
+  const pts = pointsText(l, points);
+  // 配点：見出し行の右端（right）か番号の後（after）。本文の最後（bodyEnd）は texExport 側
+  const ptsRight = pts && l.pointsStyle === 'right' && head.position === 'above' ? `\\hfill ${pts}` : '';
+  const ptsAfter = pts && (l.pointsStyle === 'after' || (l.pointsStyle === 'right' && head.position !== 'above')) ? `${gap}${pts}` : '';
+  const close = (inner) => [...inner, ...(frame ? ['\\end{minipage}}\\endgroup'] : [])];
+  if (head.position === 'inline') {
+    // 番号の直後から本文が始まり、2 行目以降は左端に戻る
+    L.push(`\\noindent{\\lpeheadfont\\lpenum{${n}}}${t}${ptsAfter}${gap}\\ignorespaces`);
+    return { open: L, close: close([]) };
   }
-  L.push(`\\noindent{\\lpeheadfont\\lpenum{${n}}}${t}${st}\\par\\nopagebreak\\vspace{${Number(l.spaceAfterHead)}mm}`);
+  if (head.position === 'hanging') {
+    // 字下げ幅は「設定値」と「見出し番号の幅＋空き」の大きい方
+    L.push(
+      `\\settowidth{\\lpehangw}{\\lpeheadfont\\lpenum{${n}}}\\addtolength{\\lpehangw}{${gapMm}mm}\\ifdim\\lpehangw<${Number(l.bodyIndent)}mm\\setlength{\\lpehangw}{${Number(l.bodyIndent)}mm}\\fi`
+    );
+    L.push(
+      `\\begin{list}{}{\\setlength{\\leftmargin}{\\lpehangw}\\setlength{\\labelwidth}{\\dimexpr\\lpehangw-${gapMm}mm\\relax}\\setlength{\\labelsep}{${gapMm}mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{\\parskip}}`
+    );
+    const headLine = t || st || ptsAfter ? `${t ? `{\\lpeheadfont ${title}}` : ''}${ptsAfter}${st}\\par\\vspace{${Number(l.spaceAfterHead)}mm}` : '';
+    L.push(`\\item[{\\lpeheadfont\\lpenum{${n}}}]${headLine}`);
+    return { open: L, close: close(['\\end{list}']) };
+  }
+  const line = `{\\lpeheadfont\\lpenum{${n}}}${t}${ptsAfter}`;
+  if (head.align === 'center') L.push(`{\\centering ${line}\\par}${ptsRight || st ? `\\noindent\\hfill${ptsRight.replace('\\hfill', '')}${st.replace('\\hfill', '')}\\par` : ''}`);
+  else L.push(`\\noindent${line}${ptsRight}${st}\\par`);
+  L.push(`\\nopagebreak\\vspace{${Number(l.spaceAfterHead)}mm}`);
   L.push('\\begin{lpebody}');
-  return { open: L, close: ['\\end{lpebody}', ...(frame ? ['\\end{minipage}}\\endgroup'] : [])] };
+  return { open: L, close: close(['\\end{lpebody}']) };
 }

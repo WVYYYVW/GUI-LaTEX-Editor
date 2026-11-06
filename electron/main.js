@@ -315,6 +315,42 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0];
   });
 
+  // 図：画像を選び、問題集と同じフォルダの figures に複製する
+  ipcMain.handle('fig:choose-image', async (_e, { projectPath }) => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: '挿入する画像を選択',
+      properties: ['openFile'],
+      filters: [{ name: '画像', extensions: ['png', 'jpg', 'jpeg', 'pdf'] }],
+    });
+    if (r.canceled || !r.filePaths[0]) return null;
+    const src = r.filePaths[0];
+    if (!projectPath) return { file: src.replace(/\\/g, '/'), warn: true };
+    const dir = path.join(path.dirname(projectPath), 'figures');
+    await fs.mkdir(dir, { recursive: true });
+    const ext = path.extname(src);
+    const base = path.basename(src, ext).replace(/[^\w\-]+/g, '_') || 'figure';
+    let name = `${base}${ext.toLowerCase()}`;
+    for (let i = 2; fssync.existsSync(path.join(dir, name)); i++) {
+      // 同じ名前の別ファイルがあれば番号を付ける（同一内容ならそのまま使う）
+      const existing = await fs.readFile(path.join(dir, name));
+      const incoming = await fs.readFile(src);
+      if (existing.equals(incoming)) break;
+      name = `${base}_${i}${ext.toLowerCase()}`;
+    }
+    if (!fssync.existsSync(path.join(dir, name))) await fs.copyFile(src, path.join(dir, name));
+    return { file: `figures/${name}` };
+  });
+  ipcMain.handle('fig:read-image', async (_e, { file, projectPath }) => {
+    if (!file) return null;
+    const abs = path.isAbsolute(file) ? file : projectPath ? path.join(path.dirname(projectPath), file) : null;
+    if (!abs) return null;
+    const ext = path.extname(abs).toLowerCase();
+    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' }[ext];
+    if (!mime) return null; // PDF などはプレビューしない
+    const buf = await fs.readFile(abs);
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  });
+
   // Electron 45 以降のクリップボード API（非同期・ClipboardItem）
   ipcMain.handle('clipboard:read', async () => {
     let text = '';

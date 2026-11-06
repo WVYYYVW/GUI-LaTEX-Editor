@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   setSettings: (s) => ipcRenderer.invoke('settings:set', s),
   getEngine: () => ipcRenderer.invoke('tex:engine'),
   chooseEngine: () => ipcRenderer.invoke('tex:choose'),
+  chooseImage: (args) => ipcRenderer.invoke('fig:choose-image', args),
+  readImage: (args) => ipcRenderer.invoke('fig:read-image', args),
   readClipboard: () => ipcRenderer.invoke('clipboard:read'),
   writeClipboard: (data) => ipcRenderer.invoke('clipboard:write', data),
   confirmDiscard: () => ipcRenderer.invoke('app:confirm-discard'),

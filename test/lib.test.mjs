@@ -69,7 +69,7 @@ test('TeX 文書の生成とエラー行の逆引き', () => {
   const tex = buildTex(doc);
   assert.match(tex, /\\documentclass\[11pt\]\{ltjsarticle\}/);
   assert.match(tex, /paperwidth=210mm,paperheight=297mm/);
-  assert.match(tex, /\\lpenum\{1\}\}\\quad\{\\lpeheadfont 二次方程式\}/);
+  assert.match(tex, /\\lpenum\{1\}\}\\hspace\{3mm\}\{\\lpeheadfont 二次方程式\}/);
   const lines = tex.split('\n');
   const idx = lines.findIndex((l) => l.includes('x^2 - 5x + 6 = 0'));
   const loc = locateLine(tex, idx + 1);
@@ -80,4 +80,56 @@ test('プリアンブルのマクロを読む', () => {
   const m = collectMacros('\\newcommand{\\R}{\\mathbb{R}}\n\\DeclareMathOperator{\\rank}{rank}');
   assert.equal(m['\\R'], '\\mathbb{R}');
   assert.equal(m['\\rank'], '\\operatorname{rank}');
+});
+
+import { compileExpr, sampleFunction, figureBlock, findFigures, defaultGraph, defaultGeo } from '../src/renderer/lib/figure.js';
+
+test('グラフの式を解析する（暗黙の掛け算・関数・絶対値）', () => {
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
+  near(compileExpr('x^2-2x+1')(3), 4);
+  near(compileExpr('2(x+1)')(1), 4);
+  near(compileExpr('sin(x)')(Math.PI / 2), 1);
+  near(compileExpr('|x-3|')(1), 2);
+  near(compileExpr('e^x')(1), Math.E);
+  near(compileExpr('x^(1/3)')(-8), -2);
+  near(compileExpr('ｘ²＋１')(2), 5);
+  assert.throws(() => compileExpr('y+1'), /変数は x のみ/);
+});
+
+test('1/x は漸近線で線が分かれる', () => {
+  const segs = sampleFunction(compileExpr('1/x'), -3, 3, -5, 5);
+  assert.equal(segs.length, 2);
+});
+
+test('図は JSON 付きで保存し、読み戻せる', () => {
+  const g = defaultGraph();
+  g.points.push({ x: 1, y: -1, label: 'P', pos: 'below', drop: true });
+  const src = `前文\n${figureBlock(g)}\n後文`;
+  const figs = findFigures(src);
+  assert.equal(figs.length, 1);
+  assert.deepEqual(figs[0].spec, g);
+  assert.match(src, /\\begin\{tikzpicture\}/);
+  const geo = defaultGeo();
+  geo.points.push({ id: 'P1', x: 0, y: 0, label: 'A' }, { id: 'P2', x: 3, y: 0, label: 'B' });
+  geo.segments.push({ a: 'P1', b: 'P2' });
+  assert.match(figureBlock(geo), /\\draw \(P1\) -- \(P2\);/);
+});
+
+import { UNIVERSITY_THEMES } from '../src/renderer/lib/universityThemes.js';
+import { applyTheme, applyPunct } from '../src/renderer/lib/layout.js';
+
+test('大学テーマはすべて TeX を生成できる', () => {
+  for (const t of UNIVERSITY_THEMES) {
+    const doc = newDocument(true);
+    doc.problems[0].points = 30;
+    applyTheme(doc.meta, t);
+    const tex = buildTex(doc);
+    assert.match(tex, /\\begin\{document\}/, t.name);
+    if (t.layout.paper === 'b5') assert.match(tex, /paperwidth=182mm,paperheight=257mm/, t.name);
+  }
+});
+
+test('句読点の統一は数式の中を変えない', () => {
+  const l = { punct: 'commaPeriod' };
+  assert.equal(applyPunct('a、b。$f(x)、y$', l, findMathRanges), 'a，b．$f(x)、y$');
 });

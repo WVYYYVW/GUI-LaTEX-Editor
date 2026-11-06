@@ -341,3 +341,78 @@ input[type='color'] { width: 34px; height: 26px; padding: 0; border: 1px solid v
   #print-root .sh-pagebreak { break-before: page; border: none; margin: 0; }
   #print-root .sh-pagebreak span { display: none; }
 }
+
+/* ---------- 細部設定（小問・段落・別行立て） ---------- */
+.page .pv-par { margin: 0 0 var(--par-skip, 1.5mm); }
+.page.parindent .pv-par + .pv-par { text-indent: 1em; }
+.page .sh-inline { display: flow-root; }
+.page .sh-float { float: left; line-height: inherit; }
+.page .sh-inline .sh-body > .pv-par:first-child { margin-top: 0; }
+.page.fleqn .katex-display { text-align: left; padding-left: var(--math-indent); }
+.page.fleqn .katex-display > .katex { text-align: left; }
+/* 小問: 字下げ・番号後の空き・間隔（番号は右寄せで本文の手前に置く＝LaTeX の既定と同じ） */
+.page ol { padding-left: var(--sub-indent) !important; }
+.page ol > li { margin-bottom: var(--sub-gap); }
+.page ol > li::before { left: auto !important; right: calc(100% + var(--sub-sep)); white-space: nowrap; }
+.page.sub-full.sub-paren ol.en-decimal > li::before, .page.sub-full ol.en-paren > li::before { content: '（' counter(en) '）'; }
+.page.sub-full.sub-roman ol.en-decimal > li::before, .page.sub-full ol.en-roman > li::before { content: '（' counter(en, lower-roman) '）'; }
+.page.sub-full.sub-alpha ol.en-decimal > li::before, .page.sub-full ol.en-alpha > li::before { content: '（' counter(en, lower-alpha) '）'; }
+.page.sub-full.sub-kata ol.en-decimal > li::before { content: '（' counter(en, katakana) '）'; }
+/* 2 行目以降を左端に戻す */
+.page.sub-wrapleft ol { padding-left: 0 !important; }
+.page.sub-wrapleft ol > li { padding-left: 0; text-indent: 0; }
+.page.sub-wrapleft ol > li::before { position: static !important; display: inline-block; margin-left: var(--sub-indent); margin-right: var(--sub-sep); }
+.page.sub-decimal ol.en-decimal { list-style: none; counter-reset: en; }
+.page.sub-decimal ol.en-decimal > li { counter-increment: en; position: relative; }
+.page.sub-decimal ol.en-decimal > li::before { content: counter(en) '.'; position: absolute; }
+
+/* ---------- 図・グラフ ---------- */
+.fig-modal { width: min(1320px, 97vw); height: 92vh; display: flex; flex-direction: column; padding: 14px 18px; }
+.fig-grid { flex: 1; display: grid; grid-template-columns: minmax(400px, 480px) 1fr; gap: 14px; min-height: 0; }
+.fig-stage { display: flex; flex-direction: column; min-height: 0; gap: 6px; }
+.fig-canvas { flex: 1; overflow: auto; background: var(--paper); border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; padding: 10px; cursor: crosshair; touch-action: none; }
+.fig-canvas svg { max-width: 100%; height: auto; }
+.fig-canvas .fig-handle { cursor: grab; }
+.fig-error { color: var(--danger); font-size: 12.5px; min-height: 1em; }
+.fig-fn, .fig-pt { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.fig-fn > input[data-k='expr'] { flex: 1; font-family: var(--mono); font-size: 14px; }
+.fig-y { font-family: var(--serif); font-style: italic; }
+.fig-sub { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; font-size: 12px; color: var(--muted); }
+.fig-sub label, .fig-pt label { display: inline-flex; align-items: center; gap: 4px; }
+input.num { width: 64px; }
+input.mid { width: 110px; }
+.fig-range { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.fig-range input { width: 70px; }
+.fig-quick { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.fig-quick button { font-size: 12px; padding: 2px 8px; border-radius: 12px; }
+.fig-file { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+.pv-fig { margin: 0.4em 0; cursor: pointer; }
+.pv-fig:hover { outline: 2px dashed rgba(47, 111, 223, 0.4); outline-offset: 2px; }
+.pv-fig svg { max-width: 100%; height: auto; }
+.pv-fig > svg { display: block; margin: 0 auto; }
+
+/* ---------- 書式ボタン ---------- */
+.fmt-bar { display: flex; align-items: center; gap: 3px; margin-right: 8px; }
+.fmt-bar button { padding: 2px 8px; font-size: 13px; }
+.fmt-bar select { padding: 2px 4px; font-size: 12px; }
+.fmt-color input { width: 24px; height: 22px; vertical-align: middle; }
+.fig-canvas svg { width: 100%; max-width: 900px; height: auto; max-height: none; }
+
+/* ---------- 大学テーマ用 ---------- */
+.hn-box.thick { border-width: 1.2pt; }
+.sh-head.center { justify-content: center; }
+.sh-points.right { margin-left: auto; }
+.sh-endtext { text-align: center; font-family: var(--sans); margin-top: 8mm; }
+@counter-style lpe-pparen { system: fixed; symbols: '⑴' '⑵' '⑶' '⑷' '⑸' '⑹' '⑺' '⑻' '⑼' '⑽'; suffix: ''; }
+.sub-pparen ol.en-decimal, .sub-pparen ol.en-paren { list-style: none; counter-reset: en; }
+.sub-pparen ol.en-decimal > li, .sub-pparen ol.en-paren > li { counter-increment: en; position: relative; }
+.page.sub-pparen ol.en-decimal > li::before, .page.sub-pparen ol.en-paren > li::before { content: counter(en, lpe-pparen); position: absolute; }
+/* 2 行目以降を左端に戻す（字下げあり） */
+.page.sub-wrapleft ol { padding-left: var(--sub-wrap) !important; }
+.page.sub-wrapleft ol > li::before { margin-left: calc(var(--sub-indent) - var(--sub-wrap)); }
+/* 段落の 1 字下げは最初の段落から（見出しの直後に本文が続く配置は除く） */
+.page.parindent .sh-body .pv-par { text-indent: 1em; }
+.page.parindent .sh-inline .sh-body > .pv-par:first-of-type { text-indent: 0; }
+.page.parindent .sh-body li, .page.parindent .sh-body .katex-display { text-indent: 0; }
+.hn-box { display: inline-flex; align-items: center; justify-content: center; min-width: 1.3em; height: 1.35em; line-height: 1; padding: 0 0.1em; vertical-align: -0.25em; }
+.sh-titlehead { text-align: center; font-size: 1.44em; font-weight: 700; margin-bottom: 6mm; }

@@ -77,6 +77,7 @@ export function normalizeDoc(data) {
       body: String(p.body ?? ''),
       solution: String(p.solution ?? ''),
       layout: { ...defaultProblemLayout(), ...(p.layout || {}) },
+      points: p.points == null || p.points === '' ? null : Number(p.points),
     });
     if (p.id && !seen.has(p.id)) q.id = String(p.id);
     seen.add(q.id);

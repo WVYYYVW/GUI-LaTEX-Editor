@@ -1,5 +1,5 @@
 // CodeMirror 6 による LaTeX ソースエディタ
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { EditorView, keymap, Decoration, ViewPlugin } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { StreamLanguage } from '@codemirror/language';
@@ -56,7 +56,7 @@ export function createEditor(parent, { onChange, keys = [], getAutoHalfwidth = (
     mathHighlighter,
     baseTheme,
     themeComp.of(dark.matches ? oneDark : []),
-    keymap.of([...keys, indentWithTab]),
+    Prec.highest(keymap.of([...keys, indentWithTab])), // 書式ショートカットを既定のキー割り当てより優先
     EditorView.updateListener.of((u) => {
       if (!u.docChanged) return;
       onChange(u.state.doc.toString());
@@ -92,6 +92,11 @@ export function createEditor(parent, { onChange, keys = [], getAutoHalfwidth = (
         selection: { anchor: cursor ?? from + insert.length },
         scrollIntoView: true,
       });
+      view.focus();
+    },
+    /** 置き換えて、指定範囲を選択状態にする（書式を重ねて付けられるように） */
+    replaceSelect(from, to, insert, selFrom, selTo) {
+      view.dispatch({ changes: { from, to, insert }, selection: { anchor: selFrom, head: selTo }, scrollIntoView: true });
       view.focus();
     },
     gotoLine(n) {

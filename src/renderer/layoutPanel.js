@@ -1,6 +1,6 @@
 // 「レイアウト / テーマ」ダイアログと、プレビュー上での直接操作（解答スペースのドラッグ）
 import { HEAD_STYLES, SUB_LABELS, BASE_THEMES, applyTheme, headNumberHtml, normalizeLayout } from './lib/layout.js';
-import { UNIVERSITY_THEMES } from './lib/universityThemes.js';
+import { UNIVERSITY_THEMES, UNVERIFIED_UNIVERSITIES } from './lib/universityThemes.js';
 import { renderSheet } from './lib/preview.js';
 
 const $ = (s, root = document) => root.querySelector(s);
@@ -141,7 +141,7 @@ export function initLayoutPanel(deps) {
       if (el.type === 'checkbox') el.checked = !!v;
       else if (document.activeElement !== el) el.value = v ?? '';
       const out = el.parentElement.querySelector('output');
-      if (out) out.textContent = el.type === 'range' && Number(el.step) < 1 ? Number(v).toFixed(el.step.includes('.0') ? 2 : 1) : v;
+      if (out) out.textContent = el.type === 'range' ? Number(v).toFixed((el.step.split('.')[1] || '').length) : v;
     }
     for (const seg of $$('[data-seg], [data-segm]', dlg)) {
       const v = seg.dataset.seg ? getPath(l, seg.dataset.seg) : m[seg.dataset.segm];
@@ -196,6 +196,10 @@ export function initLayoutPanel(deps) {
     };
     fill($('#ld-themes-base'), BASE_THEMES, {}, '');
     fill($('#ld-themes-univ'), UNIVERSITY_THEMES, {}, '準備中');
+    const note = document.createElement('div');
+    note.className = 'empty';
+    note.textContent = `未対応: ${UNVERIFIED_UNIVERSITIES.map((u) => `${u.name}（${u.reason}）`).join(' ')}`;
+    $('#ld-themes-univ').append(note);
     fill($('#ld-themes-user'), deps.getUserThemes(), { deletable: true }, 'まだありません。下で今の設定を保存できます。');
   }
   $('#ld-theme-save').addEventListener('click', async () => {

@@ -112,7 +112,7 @@ export const PALETTE = [
       t('$…$ 数式', '$‸$', '文中の数式'),
       t('\\[…\\] 別行立て', '\\[\n  ‸\n\\]', '独立した行の数式'),
       t('align* 式変形', '\\begin{align*}\n  ‸ &= \\\\\n    &= \n\\end{align*}', '= で揃える複数行の式'),
-      t('(1)(2) 小問', '\\begin{enumerate}[label=(\\arabic*)]\n  \\item ‸\n  \\item \n\\end{enumerate}', '小問 (1)(2)…'),
+      t('(1)(2) 小問', '\\begin{enumerate}\n  \\item ‸\n  \\item \n\\end{enumerate}', '小問。番号の形はレイアウト / テーマの「小問番号」で決まります'),
       t('(a)(b) 小問', '\\begin{enumerate}[label=(\\alph*)]\n  \\item ‸\n  \\item \n\\end{enumerate}'),
       t('・箇条書き', '\\begin{itemize}\n  \\item ‸\n\\end{itemize}'),
       t('太字', '\\textbf{‸}'),
@@ -122,7 +122,7 @@ export const PALETTE = [
       t('中央揃え', '\\begin{center}\n  ‸\n\\end{center}'),
       t('枠囲み', '\\fbox{‸}'),
       t('表', '\\begin{tabular}{|c|c|c|}\n  \\hline\n  ‸ &  &  \\\\ \\hline\n   &  &  \\\\ \\hline\n\\end{tabular}'),
-      t('図（画像）', '\\begin{center}\n  \\includegraphics[width=0.5\\linewidth]{‸}\n\\end{center}', '問題集ファイルと同じフォルダの画像'),
+      { kind: 'action', text: '📈 図・グラフ…', action: 'figure', insert: '', title: '関数グラフ・図形・画像を GUI で作って挿入' },
       t(
         'グラフ（TikZ）',
         '\\begin{center}\n\\begin{tikzpicture}[scale=0.8]\n  \\draw[->] (-3,0) -- (3,0) node[right] {$x$};\n  \\draw[->] (0,-1) -- (0,5) node[above] {$y$};\n  \\node[below left] at (0,0) {O};\n  \\draw[thick, domain=-2:2, smooth] plot (\\x, {\\x*\\x});‸\n\\end{tikzpicture}\n\\end{center}',

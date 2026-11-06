@@ -1,13 +1,15 @@
 // LaTeX（問題文）→ HTML プレビュー。数式は KaTeX、文章部分はよく使う命令だけを簡易変換する。
 import katex from 'katex';
 import { findMathRanges, maskComments } from './mathRanges.js';
-import { normalizeLayout, paperSize, headNumberHtml, headStyleCss } from './layout.js';
+import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct } from './layout.js';
+import { findFigures, figureToSvg } from './figure.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** プリアンブルの \newcommand / \DeclareMathOperator を KaTeX のマクロに変換 */
 export function collectMacros(preamble = '') {
-  const macros = {};
+  // アプリの書式ボタンが使う色の命令（PDF 側はプリアンブルで \textcolor[HTML] として定義）
+  const macros = { '\\lpecolor': '\\textcolor{###1}{#2}' };
   const src = maskComments(preamble);
   const readGroup = (s, i) => {
     while (s[i] === ' ' || s[i] === '\n') i++;
@@ -42,6 +44,8 @@ export function renderMath(latex, display, macros = {}) {
     macros: { ...macros },
   });
 }
+
+const SIZE_EM = { tiny: 0.5, scriptsize: 0.7, footnotesize: 0.8, small: 0.9, large: 1.2, Large: 1.44, LARGE: 1.73, huge: 2.07 };
 
 const LIST_ENVS = 'itemize|enumerate|description|center|flushright|flushleft|quote';
 
@@ -106,6 +110,8 @@ function textToHtml(s) {
     const before = s;
     s = s.replace(/\\(textbf|textit|emph|underline|texttt|textrm|textsf|fbox|mbox)\s*\{([^{}]*)\}/g, (_m, c, t) => deco[c](t));
     s = s.replace(/\\textcolor\{([a-zA-Z]+)\}\{([^{}]*)\}/g, (_m, c, t) => `<span style="color:${c}">${t}</span>`);
+    s = s.replace(/\\(?:textcolor\[HTML\]|lpecolor)\{([0-9a-fA-F]{6})\}\{([^{}]*)\}/g, (_m, c, t) => `<span style="color:#${c}">${t}</span>`);
+    s = s.replace(/\{\\(tiny|scriptsize|footnotesize|small|large|Large|LARGE|huge)\s+([^{}]*)\}/g, (_m, c, t) => `<span style="font-size:${SIZE_EM[c]}em">${t}</span>`);
     s = s.replace(/\\ruby\{([^{}]*)\}\{([^{}]*)\}/g, (_m, b, r) => `<ruby>${b}<rt>${r}</rt></ruby>`);
     if (s === before) break;
   }
@@ -186,6 +192,15 @@ function textToHtml(s) {
  */
 export function renderLatex(src, macros = {}, opts = {}) {
   if (!src || !src.trim()) return '<div class="pv-empty">（未入力）</div>';
+  // 図（% @fig … % @endfig）は同じ長さの目印に置き換えてから処理し、最後に SVG を差し込む
+  const figs = findFigures(src);
+  let work = src;
+  for (let k = figs.length - 1; k >= 0; k--) {
+    const f = figs[k];
+    const mark = `\u0005${k}\u0005`;
+    work = work.slice(0, f.from) + mark + ' '.repeat(Math.max(0, f.to - f.from - mark.length)) + work.slice(f.to);
+  }
+  src = work;
   const masked = maskComments(src);
   const ranges = findMathRanges(src);
   const maths = [];
@@ -201,7 +216,20 @@ export function renderLatex(src, macros = {}, opts = {}) {
     last = r.to;
   }
   joined += masked.slice(last);
-  return textToHtml(joined).replace(/\u0001(\d+)\u0002/g, (_m, i) => maths[Number(i)]);
+  return textToHtml(joined)
+    .replace(/\u0001(\d+)\u0002/g, (_m, i) => maths[Number(i)])
+    .replace(/\u0005(\d+)\u0005/g, (_m, k) => {
+      const f = figs[Number(k)];
+      const svg = figureToSvg(f.spec, { imageUrl: f.spec.type === 'image' ? imageResolver?.(f.spec.file) : undefined });
+      const attrs = opts.field ? ` data-field="${opts.field}" data-from="${f.from}" title="ダブルクリックで図を編集"` : '';
+      return `<div class="pv-fig"${attrs}>${svg}</div>`;
+    });
+}
+
+// 画像ファイル → 表示用 URL（main.js から設定。未取得なら null を返し、取得後に再描画させる）
+let imageResolver = null;
+export function setImageResolver(fn) {
+  imageResolver = fn;
 }
 
 export function renderInline(src, macros) {
@@ -221,11 +249,29 @@ export function renderSheet(doc, macros, opts = {}) {
   const ps = doc.problems;
   const { w } = paperSize(l);
   const headCss = headStyleCss(h);
-  const fontPt = parseInt(m.fontSize, 10) || 11;
+  const pt = bodyPt(l, parseInt(m.fontSize, 10) || 11);
+  const lineHeight = Number(l.lineHeight) > 0 ? Number(l.lineHeight) : 1.75 * l.lineSpread;
+  const punct = (t) => applyPunct(t, l, findMathRanges);
 
-  let out = `<div class="sheet page sub-${l.subLabel}${m.columns === 2 ? ' cols-2' : ''}" style="width:${w}mm;padding:${l.margin}mm;font-size:${fontPt}pt;line-height:${(1.75 * l.lineSpread).toFixed(2)}">`;
-  if (l.header) out += `<div class="sh-runhead">${esc(l.header)}</div>`;
-  if (m.title || m.subtitle || m.author || m.date || m.nameField) {
+  // 1 行の文字数が決まっていれば、本文幅＝文字数×文字サイズにして左右中央に置く（PDF と同じ）
+  const chars = Number(l.charsPerLine) || 0;
+  const textW = chars > 0 ? chars * pt * PT_MM : null;
+  const padX = textW ? Math.max(5, (w - textW) / 2) : Number(l.margin);
+
+  const s = l.sub;
+  const cls = [
+    'sheet page',
+    `sub-${l.subLabel}`,
+    s.paren === 'full' ? 'sub-full' : '',
+    s.wrap === 'left' ? 'sub-wrapleft' : '',
+    l.parIndent ? 'parindent' : '',
+    l.displayAlign === 'left' ? 'fleqn' : '',
+    m.columns === 2 ? 'cols-2' : '',
+  ].filter(Boolean).join(' ');
+  const vars = `--sub-indent:${Number(s.indent)}mm;--sub-sep:${Number(s.sep)}mm;--sub-gap:${Number(s.gap)}mm;--sub-wrap:${Number(s.wrapIndent) || 0}mm;--math-indent:${Number(l.mathIndent)}mm;--par-skip:${Number(l.parSkip)}mm`;
+  let out = `<div class="${cls}" style="width:${w}mm;padding:${l.margin}mm ${padX.toFixed(2)}mm;font-size:${pt}pt;line-height:${lineHeight.toFixed(2)};${vars}">`;
+  if (l.header) out += l.headerStyle === 'title' ? `<div class="sh-titlehead">${esc(l.header)}</div>` : `<div class="sh-runhead">${esc(l.header)}</div>`;
+  if (l.titleBlock !== false && (m.title || m.subtitle || m.author || m.date || m.nameField)) {
     out += '<header class="sh-header">';
     if (m.title) out += `<h1>${renderInline(m.title, macros)}</h1>`;
     if (m.subtitle) out += `<div class="sh-sub">${renderInline(m.subtitle, macros)}</div>`;
@@ -242,38 +288,54 @@ export function renderSheet(doc, macros, opts = {}) {
     else if (i > 0 && l.rule) out += '<hr class="sh-rule">';
     const frame = pl.frame ?? l.frame;
     const hanging = h.position === 'hanging';
-    const hang = Math.max(Number(l.bodyIndent), 8);
-    out += `<section class="sh-problem${frame ? ' framed' : ''}${hanging ? ' hanging' : ''}${brk ? ' brk' : ''}" data-index="${i}" style="margin-top:${l.spaceBefore}mm${hanging ? `;grid-template-columns:${hang}mm 1fr` : ''}">`;
-    const num = `<span class="sh-num" style="${headCss}" data-index="${i}" title="クリックでレイアウト設定">${headNumberHtml(h, n)}</span>`;
-    const title = h.showTitle && p.title ? `<span class="sh-title" style="${headCss}">${renderInline(p.title, macros)}</span>` : '';
+    const gapMm = Number(h.gap ?? 3);
+    // ぶら下げ幅は「字下げ設定」と「見出し番号の幅＋空き」の大きい方（PDF 側と同じ考え方）
+    const hangCol = `minmax(${Number(l.bodyIndent)}mm, max-content)`;
+    out += `<section class="sh-problem${frame ? ' framed' : ''}${hanging ? ' hanging' : ''}${brk ? ' brk' : ''}" data-index="${i}" style="margin-top:${l.spaceBefore}mm${hanging ? `;grid-template-columns:${hangCol} 1fr;column-gap:${gapMm}mm` : ''}">`;
+    const num = `<span class="sh-num" style="${headCss}${hanging ? '' : `;margin-right:${gapMm}mm`}" data-index="${i}" title="クリックでレイアウト設定">${headNumberHtml(h, n)}</span>`;
+    const title = h.showTitle && p.title ? `<span class="sh-title" style="${headCss};margin-right:${gapMm}mm">${renderInline(p.title, macros)}</span>` : '';
     const st = m.showDifficulty ? stars(p.difficulty) : '';
-    const body = `<div class="sh-body">${renderLatex(p.body, macros)}</div>`;
+    const ptsText = pointsText(l, p.points);
+    const ptsRight = ptsText && l.pointsStyle === 'right' && h.position === 'above' ? `<span class="sh-points right">${esc(ptsText)}</span>` : '';
+    const ptsAfter = ptsText && (l.pointsStyle === 'after' || (l.pointsStyle === 'right' && h.position !== 'above')) ? `<span class="sh-points" style="margin-right:${gapMm}mm">${esc(ptsText)}</span>` : '';
+    const bodySrc = punct(p.body) + (ptsText && l.pointsStyle === 'bodyEnd' ? ` ${ptsText}` : '');
+    const body = `<div class="sh-body">${renderLatex(bodySrc, macros)}</div>`;
     let answer = '';
-    if (m.answerMode === 'after' && p.solution.trim()) answer = `<div class="sh-answer"><b>【解答】</b>${renderLatex(p.solution, macros)}</div>`;
+    if (m.answerMode === 'after' && p.solution.trim()) answer = `<div class="sh-answer"><b>【解答】</b>${renderLatex(punct(p.solution), macros)}</div>`;
     const space = Number(pl.answerSpace ?? m.spaceAfter) || 0;
     const spaceEl = opts.interactive
       ? `<div class="sh-space" data-index="${i}" style="height:${space}mm"><div class="sh-handle" data-index="${i}" title="上下にドラッグして解答スペースを調整（ダブルクリックで全体設定に戻す）">⇕ 解答スペース ${space}mm${pl.answerSpace == null ? '（全体設定）' : ''}</div></div>`
       : space > 0
         ? `<div style="height:${space}mm"></div>`
         : '';
-    if (hanging) {
-      out += `<div class="sh-hcol">${num}</div><div>${title || st ? `<div class="sh-head" style="margin-bottom:${l.spaceAfterHead}mm">${title}${st}</div>` : ''}${body}${answer}${spaceEl}</div>`;
+    if (h.position === 'inline') {
+      // 番号の直後から本文。2 行目以降は左端に戻る
+      const fl = (x, c) => x.replace(`class="${c}"`, `class="${c} sh-float"`);
+      out += `<div class="sh-inline">${fl(num, 'sh-num')}${title ? fl(title, 'sh-title') : ''}${ptsAfter ? fl(ptsAfter, 'sh-points') : ''}${body}${answer}</div>${spaceEl}`;
+    } else if (hanging) {
+      out += `<div class="sh-hcol">${num}</div><div>${title || st || ptsAfter ? `<div class="sh-head" style="margin-bottom:${l.spaceAfterHead}mm">${title}${ptsAfter}${st}</div>` : ''}${body}${answer}${spaceEl}</div>`;
     } else {
-      out += `<div class="sh-head" style="margin-bottom:${l.spaceAfterHead}mm">${num}${title}${st}</div>`;
+      const center = h.align === 'center';
+      out += `<div class="sh-head${center ? ' center' : ''}" style="margin-bottom:${l.spaceAfterHead}mm">${num}${title}${ptsAfter}${ptsRight}${st}</div>`;
       out += `<div style="margin-left:${l.bodyIndent}mm">${body}${answer}</div>${spaceEl}`;
     }
     out += '</section>';
+    if (l.afterEach === 'blank') out += '<div class="sh-pagebreak"><span>改ページ（白紙のページ）</span></div>';
+    else if (l.afterEach === 'draft') out += `<div class="sh-pagebreak"><span>改ページ（${esc(l.draftText || '下書き用紙')}）</span></div>`;
   });
   out += '</div>';
+  if (l.endText) out += `<div class="sh-endtext">${esc(l.endText)}</div>`;
   if ((m.answerMode === 'end' || m.answerMode === 'separate') && ps.some((p) => p.solution.trim())) {
     out += `<div class="sh-answers${m.answerMode === 'separate' ? ' separate' : ''}">`;
     if (m.answerMode === 'separate') out += '<div class="sh-pagebreak"><span>改ページ</span></div>';
     out += '<h2>解答</h2>';
     ps.forEach((p, i) => {
       if (!p.solution.trim()) return;
-      out += `<section class="sh-problem"><div class="sh-head"><span class="sh-num" style="${headCss}">${headNumberHtml(h, i + 1)}</span>${p.title ? `<span class="sh-title">${renderInline(p.title, macros)}</span>` : ''}</div><div class="sh-body">${renderLatex(p.solution, macros)}</div></section>`;
+      out += `<section class="sh-problem"><div class="sh-head"><span class="sh-num" style="${headCss}">${headNumberHtml(h, i + 1)}</span>${p.title ? `<span class="sh-title">${renderInline(p.title, macros)}</span>` : ''}</div><div class="sh-body">${renderLatex(punct(p.solution), macros)}</div></section>`;
     });
     out += '</div>';
   }
   return out + '</div>';
 }
+
+const PT_MM = 25.4 / 72.27;
