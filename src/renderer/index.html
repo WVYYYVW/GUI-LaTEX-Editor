@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: http://localhost:*"
+    />
+    <title>LaTeX 問題エディタ</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- ツールバー -->
+      <header class="toolbar">
+        <div class="tb-group">
+          <button data-action="new" title="新規 (Ctrl/⌘+N)">新規</button>
+          <button data-action="open" title="開く (Ctrl/⌘+O)">開く</button>
+          <button data-action="save" title="保存 (Ctrl/⌘+S)">保存</button>
+        </div>
+        <div class="tb-group">
+          <button data-action="math-editor" class="accent" title="数式エディタ (Ctrl/⌘+E)">∑ 数式エディタ</button>
+          <button data-action="smart-paste" class="accent" title="Claude などの回答を変換して取り込む (Ctrl/⌘+Shift+V)">AIの回答を貼り付け</button>
+          <button data-action="copy-word" title="カーソル位置の数式を Word に貼れる形でコピー (Ctrl/⌘+Shift+C)">Word用にコピー</button>
+        </div>
+        <div class="tb-spacer"></div>
+        <div class="tb-group">
+          <button data-action="compile-pdf" class="primary" title="LuaLaTeX で PDF を作成 (Ctrl/⌘+Shift+B)">PDF作成</button>
+          <button data-action="print-pdf" title="TeX がなくてもプレビューを PDF 保存">簡易PDF</button>
+          <button data-action="export-tex" title=".tex を書き出す">.tex</button>
+          <button data-action="layout" class="accent" title="大問の見出し・余白・用紙・テーマ">レイアウト / テーマ</button>
+          <button data-action="settings" title="文書と TeX の設定">設定</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <!-- 問題一覧 -->
+        <aside class="sidebar">
+          <div class="sb-head">
+            <input id="filter" type="search" placeholder="検索（タイトル・タグ・本文）" />
+          </div>
+          <ol id="problem-list" class="problem-list"></ol>
+          <div class="sb-actions">
+            <button data-action="add-problem" class="primary">＋ 問題を追加</button>
+            <button data-action="duplicate-problem" title="複製">複製</button>
+            <button data-action="move-up" title="上へ">↑</button>
+            <button data-action="move-down" title="下へ">↓</button>
+            <button data-action="delete-problem" class="danger" title="削除">削除</button>
+          </div>
+        </aside>
+
+        <!-- 編集 -->
+        <section class="editor-pane">
+          <div id="empty-state" class="empty-state hidden">
+            <p>問題がありません。</p>
+            <button data-action="add-problem" class="primary">＋ 問題を追加</button>
+          </div>
+          <div id="editor-area">
+            <div class="problem-meta">
+              <label class="pm-title">タイトル<input id="p-title" type="text" placeholder="例: 二次関数の最大・最小" /></label>
+              <label class="pm-tags">タグ<input id="p-tags" type="text" placeholder="カンマ区切り（例: 数I, 二次関数）" /></label>
+              <div class="pm-diff">
+                難易度
+                <span id="p-diff" class="stars" role="radiogroup" aria-label="難易度"></span>
+              </div>
+            </div>
+            <div class="problem-layout">
+              <span class="pl-k">この問題の配置</span>
+              <label><input id="pl-break" type="checkbox" /> 前で改ページ</label>
+              <label>枠
+                <select id="pl-frame">
+                  <option value="inherit">全体設定に従う</option>
+                  <option value="on">囲む</option>
+                  <option value="off">囲まない</option>
+                </select>
+              </label>
+              <label>解答スペース
+                <input id="pl-space" type="number" min="0" max="300" step="5" placeholder="全体設定" />mm
+              </label>
+            </div>
+            <div class="field-tabs" role="tablist">
+              <button role="tab" data-field="body" class="active">問題文</button>
+              <button role="tab" data-field="solution">解答・解説</button>
+              <span class="tb-spacer"></span>
+              <button id="toggle-palette" class="ghost" title="記号パレットの表示切替">記号パレット ▾</button>
+            </div>
+            <div id="palette" class="palette">
+              <div id="palette-tabs" class="palette-tabs"></div>
+              <div id="palette-grid" class="palette-grid"></div>
+            </div>
+            <div id="cm-host" class="cm-host"></div>
+            <div id="error-panel" class="error-panel hidden">
+              <div class="ep-head"><b>LaTeX のエラー</b><button id="ep-close" class="ghost">閉じる</button></div>
+              <ul id="error-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- プレビュー -->
+        <section class="preview-pane">
+          <div class="preview-tabs" role="tablist">
+            <button role="tab" data-preview="problem" class="active">この問題</button>
+            <button role="tab" data-preview="sheet">プリント全体</button>
+            <span class="tb-spacer"></span>
+            <span class="pv-hint">数式をダブルクリックで編集</span>
+          </div>
+          <div id="preview" class="preview"></div>
+        </section>
+      </main>
+
+      <footer class="statusbar">
+        <span id="status-file"></span>
+        <span class="tb-spacer"></span>
+        <span id="status-engine"></span>
+      </footer>
+    </div>
+
+    <!-- 印刷（簡易 PDF）用 -->
+    <div id="print-root"></div>
+
+    <!-- 数式エディタ -->
+    <div id="math-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="md-title">
+      <div class="modal math-modal">
+        <h2 id="md-title">数式エディタ</h2>
+        <p class="hint">
+          キーボードでそのまま入力できます：<kbd>/</kbd> 分数　<kbd>^</kbd> 上付き　<kbd>_</kbd> 下付き　<kbd>sqrt</kbd> 根号　<kbd>int</kbd> 積分　<kbd>alpha</kbd> α　<kbd>Tab</kbd> 次の枠へ。
+          日本語入力が ON のままでも全角英数字は自動で半角になります。
+        </p>
+        <math-field id="mf"></math-field>
+        <div class="md-row">
+          <label for="mf-latex">LaTeX</label>
+          <textarea id="mf-latex" rows="3" spellcheck="false"></textarea>
+        </div>
+        <div class="md-row md-mode" id="mf-mode">
+          <span>挿入の形</span>
+          <label><input type="radio" name="mf-mode" value="inline" checked /> 文中（$…$）</label>
+          <label><input type="radio" name="mf-mode" value="display" /> 別行立て（\[…\]）</label>
+        </div>
+        <div class="actions">
+          <button id="mf-kbd" class="ghost">⌨ 仮想キーボード</button>
+          <button id="mf-word" class="ghost" title="この数式を Word に貼れる形でコピー">Word用にコピー</button>
+          <span class="tb-spacer"></span>
+          <button id="mf-cancel">キャンセル</button>
+          <button id="mf-ok" class="primary">挿入</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI の回答を貼り付け -->
+    <div id="paste-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pd-title">
+      <div class="modal paste-modal">
+        <h2 id="pd-title">AI の回答を取り込む</h2>
+        <p class="hint">
+          Claude などの回答をコピーして、下の欄に貼り付けてください（Ctrl/⌘+V）。
+          表示された回答をそのまま選択したコピーも、「コピー」ボタンでコピーした Markdown も取り込めます。
+          数式は $…$ / \[…\] の LaTeX に、箇条書き・太字・表も LaTeX に変換されます。
+        </p>
+        <div class="pd-grid">
+          <div class="pd-col">
+            <div class="pd-label">貼り付けた内容 <span id="pd-source" class="badge"></span></div>
+            <textarea id="pd-input" spellcheck="false" placeholder="ここに貼り付け"></textarea>
+          </div>
+          <div class="pd-col">
+            <div class="pd-label">変換後の LaTeX（編集できます）</div>
+            <textarea id="pd-output" spellcheck="false"></textarea>
+          </div>
+          <div class="pd-col">
+            <div class="pd-label">プレビュー</div>
+            <div id="pd-preview" class="preview pd-preview"></div>
+          </div>
+        </div>
+        <div class="md-row">
+          <label><input type="checkbox" id="pd-unicode" checked /> Unicode の式（x² や √2 など）も LaTeX にする</label>
+        </div>
+        <div class="actions">
+          <span class="pd-target">挿入先：
+            <select id="pd-target">
+              <option value="cursor">カーソル位置</option>
+              <option value="body">この問題の問題文（置き換え）</option>
+              <option value="solution">この問題の解答（置き換え）</option>
+              <option value="new">新しい問題として追加</option>
+            </select>
+          </span>
+          <span class="tb-spacer"></span>
+          <button id="pd-cancel">キャンセル</button>
+          <button id="pd-ok" class="primary">取り込む</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- レイアウト・テーマ -->
+    <div id="layout-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ld-title">
+      <div class="modal layout-modal">
+        <div class="ld-top">
+          <h2 id="ld-title">レイアウトとテーマ</h2>
+          <span class="tb-spacer"></span>
+          <button id="ld-revert" class="ghost" title="ダイアログを開く前の状態に戻す">元に戻す</button>
+          <button id="ld-close" class="primary">完了</button>
+        </div>
+        <div class="ld-grid">
+          <div class="ld-controls" id="ld-controls">
+            <section>
+              <h3>テーマ</h3>
+              <div class="ld-theme-group-label">汎用</div>
+              <div id="ld-themes-base" class="theme-cards"></div>
+              <div class="ld-theme-group-label">大学入試の体裁（公開されている問題冊子をもとにした近似です）</div>
+              <div id="ld-themes-univ" class="theme-cards"></div>
+              <div class="ld-theme-group-label">自分のテーマ</div>
+              <div id="ld-themes-user" class="theme-cards"></div>
+              <div class="ld-row">
+                <input id="ld-theme-name" type="text" placeholder="テーマ名（例: 2学期期末用）" />
+                <button id="ld-theme-save">今の設定をテーマとして保存</button>
+              </div>
+            </section>
+
+            <section>
+              <h3>大問の見出し</h3>
+              <div id="ld-head-styles" class="seg seg-wrap"></div>
+              <div class="ld-row" id="ld-label-row">
+                <label>見出しの文字<input data-l="head.label" type="text" /></label>
+              </div>
+              <div class="ld-row">
+                <span class="ld-k">書体</span>
+                <div class="seg" data-seg="head.font"><button data-v="gothic">ゴシック</button><button data-v="mincho">明朝</button></div>
+                <label class="ld-check"><input data-l="head.bold" type="checkbox" /> 太字</label>
+                <label class="ld-color">色 <input data-l="head.color" type="color" /></label>
+              </div>
+              <div class="ld-slider"><span class="ld-k">大きさ</span><input data-l="head.size" type="range" min="9" max="24" step="0.5" /><output></output><span class="unit">pt</span></div>
+              <div class="ld-row">
+                <span class="ld-k">位置</span>
+                <div class="seg" data-seg="head.position"><button data-v="above">本文の上</button><button data-v="hanging">左にぶら下げ</button></div>
+                <label class="ld-check"><input data-l="head.showTitle" type="checkbox" /> タイトルも出す</label>
+              </div>
+            </section>
+
+            <section>
+              <h3>余白と配置</h3>
+              <div class="ld-slider"><span class="ld-k">大問の前</span><input data-l="spaceBefore" type="range" min="0" max="40" step="1" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">見出しの後</span><input data-l="spaceAfterHead" type="range" min="0" max="15" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">本文の字下げ</span><input data-l="bodyIndent" type="range" min="0" max="30" step="1" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">解答スペース</span><input data-m="spaceAfter" type="range" min="0" max="150" step="5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-row">
+                <label class="ld-check"><input data-l="frame" type="checkbox" /> 大問を枠で囲む</label>
+                <label class="ld-check"><input data-l="rule" type="checkbox" /> 大問の間に線</label>
+                <label class="ld-check"><input data-l="newPageEach" type="checkbox" /> 大問ごとに改ページ</label>
+              </div>
+              <div class="ld-row">
+                <span class="ld-k">小問番号</span>
+                <div class="seg" data-seg="subLabel"></div>
+              </div>
+              <p class="hint">プレビューの「⇕ 解答スペース」を上下にドラッグすると、問題ごとに余白を変えられます。</p>
+            </section>
+
+            <section>
+              <h3>用紙</h3>
+              <div class="ld-row">
+                <div class="seg" data-seg="paper"><button data-v="a4">A4</button><button data-v="b4">B4</button><button data-v="a3">A3</button></div>
+                <div class="seg" data-seg="landscape"><button data-v="false">縦</button><button data-v="true">横</button></div>
+                <div class="seg" data-segm="columns"><button data-v="1">1段</button><button data-v="2">2段</button></div>
+              </div>
+              <div class="ld-slider"><span class="ld-k">余白</span><input data-l="margin" type="range" min="8" max="40" step="1" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">行間</span><input data-l="lineSpread" type="range" min="0.8" max="2" step="0.05" /><output></output><span class="unit">倍</span></div>
+              <div class="ld-row">
+                <label>ページ上部の文字<input data-l="header" type="text" placeholder="例: 数学（理系）" /></label>
+                <span class="ld-k">ページ番号</span>
+                <div class="seg" data-seg="pageNumber"><button data-v="plain">1</button><button data-v="dash">— 1 —</button><button data-v="none">なし</button></div>
+              </div>
+            </section>
+          </div>
+          <div class="ld-preview preview" id="ld-preview"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="settings-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="sd-title">
+      <form class="modal settings-modal" id="settings-form">
+        <h2 id="sd-title">設定</h2>
+        <fieldset>
+          <legend>プリント</legend>
+          <label>タイトル<input name="title" type="text" /></label>
+          <label>サブタイトル<input name="subtitle" type="text" /></label>
+          <div class="two">
+            <label>作成者<input name="author" type="text" /></label>
+            <label>日付<input name="date" type="text" placeholder="例: 2026年11月6日" /></label>
+          </div>
+          <div class="two">
+            <label>解答の位置
+              <select name="answerMode">
+                <option value="end">問題の後にまとめて</option>
+                <option value="separate">別ページ（解答用紙）</option>
+                <option value="after">各問題の直後</option>
+                <option value="none">出力しない</option>
+              </select>
+            </label>
+            <label>本文の文字サイズ
+              <select name="fontSize">
+                <option>10pt</option>
+                <option>11pt</option>
+                <option>12pt</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">大問の見出し・余白・用紙・段組みは「レイアウト / テーマ」で設定します。</p>
+          <label class="check"><input name="showDifficulty" type="checkbox" /> 難易度（★）を表示</label>
+          <label class="check"><input name="nameField" type="checkbox" /> 組・番・氏名の記入欄を付ける</label>
+          <label>プリアンブル（\newcommand などの定義）<textarea name="preamble" rows="5" spellcheck="false"></textarea></label>
+        </fieldset>
+        <fieldset>
+          <legend>TeX 環境（PDF 作成）</legend>
+          <div class="engine-row">
+            <input name="enginePath" type="text" placeholder="自動検出" />
+            <button type="button" id="sd-browse">参照…</button>
+          </div>
+          <p class="hint" id="sd-engine-hint"></p>
+        </fieldset>
+        <fieldset>
+          <legend>入力</legend>
+          <label class="check"><input name="autoHalfwidth" type="checkbox" /> 数式の中の全角英数字（ｘ＋１ など）を自動で半角にする</label>
+        </fieldset>
+        <div class="actions">
+          <span class="tb-spacer"></span>
+          <button type="button" id="sd-cancel">キャンセル</button>
+          <button type="submit" class="primary">OK</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="busy" class="overlay hidden"><div class="busy-box"><div class="spinner"></div><span id="busy-text">処理中…</span></div></div>
+    <div id="toast" class="toast hidden"></div>
+    <div id="ctx-menu" class="ctx-menu hidden"></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
