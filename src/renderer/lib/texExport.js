@@ -34,10 +34,14 @@ export function buildTex(doc) {
   L.push('\\makeatother');
   L.push(...texLayoutPreamble(lay, parseInt(fs, 10)));
   L.push('\\newcommand{\\lpecolor}[2]{\\textcolor[HTML]{#1}{#2}}');
+  L.push('\\newcounter{lpecovn}');
   L.push(`${MARK} preamble`);
   L.push(ensureNl(m.preamble || '').replace(/\n$/, ''));
   L.push(`${MARK} fixed`);
   L.push('\\begin{document}');
+
+  // 表紙（試験問題冊子の表紙）。表紙にはページ番号を付けず、次のページを 1 ページ目にする
+  if (m.cover?.enabled) L.push(...texCover(m.cover, doc.problems.length, (t) => applyPunct(t, lay, findMathRanges)));
 
   // 1 ページ目の上に大きく入れる見出し（例: 問　題　紙）
   if (lay.header && lay.headerStyle === 'title') L.push(`{\\centering\\Large\\bfseries ${lay.header}\\par}\\vspace{6mm}`);
@@ -108,6 +112,51 @@ export function buildTex(doc) {
 
   L.push('\\end{document}');
   return L.join('\n') + '\n';
+}
+
+/** 注意事項の「{n}」を問題数に置き換え、1 行 1 項目の配列にする */
+export function coverNotes(cover, count) {
+  return String(cover.notes || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.replace(/\{n\}/g, String(count)));
+}
+
+function texCover(c, count, punct = (t) => t) {
+  const L = [];
+  L.push('\\thispagestyle{empty}');
+  // 表紙はテーマの行送り（本文用）を使わず、表紙専用の文字の大きさ・行送りで 1 ページに収める
+  L.push('\\begingroup\\fontsize{10.5pt}{17pt}\\selectfont\\setlength{\\parskip}{0pt}');
+  L.push('\\begingroup\\sffamily\\gtfamily');
+  L.push('\\vspace*{8mm}');
+  L.push('\\begin{center}');
+  if (c.header) L.push(`{\\fontsize{15pt}{20pt}\\selectfont ${c.header}\\par}\\vspace{14mm}`);
+  if (c.subject) L.push(`{\\fontsize{34pt}{40pt}\\selectfont\\bfseries ${c.subject}\\par}\\vspace{6mm}`);
+  if (c.target) L.push(`{\\fontsize{15pt}{20pt}\\selectfont ${c.target}\\par}\\vspace{8mm}`);
+  if (c.time) L.push(`{\\fontsize{12pt}{16pt}\\selectfont 試験時間\\quad ${c.time}\\par}`);
+  L.push('\\end{center}');
+  L.push('\\endgroup');
+  const notes = coverNotes(c, count);
+  if (notes.length) {
+    L.push('\\vspace{12mm}');
+    L.push('\\noindent{\\sffamily\\gtfamily\\bfseries 注意事項}\\par\\smallskip');
+    L.push('\\begin{list}{\\arabic{lpecovn}.}{\\usecounter{lpecovn}\\setlength{\\leftmargin}{2.2\\zw}\\setlength{\\labelwidth}{1.6\\zw}\\setlength{\\labelsep}{0.6\\zw}\\setlength{\\itemsep}{1mm}\\setlength{\\topsep}{0pt}}');
+    for (const n of notes) L.push(`  \\item ${punct(n)}`);
+    L.push('\\end{list}');
+  }
+  L.push('\\vfill');
+  if (c.idField) {
+    L.push('\\begin{center}{\\renewcommand{\\arraystretch}{2.4}\\begin{tabular}{|c|p{62mm}|}\\hline');
+    L.push('\\makebox[18mm]{受験番号} & \\\\ \\hline');
+    L.push('\\makebox[18mm]{氏\\hfill 名} & \\\\ \\hline');
+    L.push('\\end{tabular}}\\end{center}');
+    L.push('\\vspace{6mm}');
+  }
+  if (c.footer) L.push(`{\\centering\\sffamily\\gtfamily\\bfseries ${punct(c.footer)}\\par}`);
+  L.push('\\endgroup');
+  L.push('\\newpage\\setcounter{page}{1}');
+  return L;
 }
 
 /**

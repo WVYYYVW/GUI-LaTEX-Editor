@@ -852,6 +852,13 @@ async function openSettings() {
     if (el.type === 'checkbox') el.checked = !!v;
     else el.value = v;
   }
+  // 表紙
+  for (const [k, v] of Object.entries(m.cover || {})) {
+    const el = form.elements.namedItem(`cover.${k}`);
+    if (!el) continue;
+    if (el.type === 'checkbox') el.checked = !!v;
+    else el.value = v ?? '';
+  }
   const s = await api.getSettings();
   form.elements.namedItem('enginePath').value = s.enginePath || '';
   form.elements.namedItem('autoHalfwidth').checked = s.autoHalfwidth !== false;
@@ -878,6 +885,11 @@ form.addEventListener('submit', async (e) => {
   m.showDifficulty = form.elements.namedItem('showDifficulty').checked;
   m.nameField = form.elements.namedItem('nameField').checked;
   m.preamble = form.elements.namedItem('preamble').value;
+  m.cover = { ...(m.cover || {}) };
+  for (const k of ['enabled', 'header', 'subject', 'target', 'time', 'notes', 'idField', 'footer']) {
+    const el = form.elements.namedItem(`cover.${k}`);
+    if (el) m.cover[k] = el.type === 'checkbox' ? el.checked : el.value;
+  }
   if (JSON.stringify(m) !== before) setDirty(true);
   state.macros = collectMacros(m.preamble);
 

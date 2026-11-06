@@ -3,6 +3,7 @@ import katex from 'katex';
 import { findMathRanges, maskComments } from './mathRanges.js';
 import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins } from './layout.js';
 import { findFigures, figureToSvg } from './figure.js';
+import { coverNotes } from './texExport.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -255,7 +256,7 @@ export function renderSheet(doc, macros, opts = {}) {
   const l = normalizeLayout(m.layout);
   const h = l.head;
   const ps = doc.problems;
-  const { w } = paperSize(l);
+  const { w, h: paperH } = paperSize(l);
   const headCss = headStyleCss(h);
   const pt = bodyPt(l, parseInt(m.fontSize, 10) || 11);
   const lineHeight = Number(l.lineHeight) > 0 ? Number(l.lineHeight) : 1.75 * l.lineSpread;
@@ -351,7 +352,32 @@ export function renderSheet(doc, macros, opts = {}) {
     });
     out += '</div>';
   }
-  return out + '</div>';
+  // 表紙は別のページとして先頭に置く
+  const cover = m.cover?.enabled
+    ? coverPage(m.cover, ps.length, `width:${w}mm;min-height:${paperH}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt`, punct)
+    : '';
+  return cover + out + '</div>';
+}
+
+function coverPage(c, count, style, punct) {
+  let h = `<div class="sheet page cover-page" style="${style}">`;
+  h += '<div class="cv-top">';
+  if (c.header) h += `<div class="cv-header">${esc(c.header)}</div>`;
+  if (c.subject) h += `<div class="cv-subject">${esc(c.subject)}</div>`;
+  if (c.target) h += `<div class="cv-target">${esc(c.target)}</div>`;
+  if (c.time) h += `<div class="cv-time">試験時間　${esc(c.time)}</div>`;
+  h += '</div>';
+  const notes = coverNotes(c, count);
+  if (notes.length) {
+    h += '<div class="cv-notes"><div class="cv-notes-title">注意事項</div><ol>';
+    for (const n of notes) h += `<li>${renderInline(punct(n), {})}</li>`;
+    h += '</ol></div>';
+  }
+  h += '<div class="cv-bottom">';
+  if (c.idField) h += '<table class="cv-id"><tr><th>受験番号</th><td></td></tr><tr><th>氏　　名</th><td></td></tr></table>';
+  if (c.footer) h += `<div class="cv-footer">${esc(punct(c.footer))}</div>`;
+  h += '</div></div>';
+  return h;
 }
 
 const PT_MM = 25.4 / 72.27;

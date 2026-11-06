@@ -35,7 +35,7 @@ export const PAPERS = {
 /** 句読点の統一（数式の外の文章だけに適用） */
 export const PUNCT = {
   asis: null,
-  commaMaru: [['、', '，']], // 「，。」
+  commaMaru: [['、', '，'], ['．', '。']], // 「，。」
   commaPeriod: [['、', '，'], ['。', '．']], // 「，．」
   tenMaru: [['，', '、'], ['．', '。']], // 「、。」
 };

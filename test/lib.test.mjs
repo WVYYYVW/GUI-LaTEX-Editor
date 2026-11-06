@@ -140,6 +140,18 @@ test('上下左右の余白・番号の張り出し・枠の大きさを TeX に
   assert.match(tex, /\\setlength\{\\leftmarginii\}\{6\.8mm\}/);
 });
 
+test('表紙を付けると、表紙の次のページを 1 ページ目にする', () => {
+  const doc = newDocument(true);
+  doc.meta.cover = { ...doc.meta.cover, enabled: true, subject: '数学', time: '90分' };
+  const tex = buildTex(doc);
+  assert.match(tex, /\\thispagestyle\{empty\}/);
+  assert.match(tex, /問題は全部で3題である。/);
+  assert.match(tex, /試験時間\\quad 90分/);
+  assert.match(tex, /\\newpage\\setcounter\{page\}\{1\}/);
+  doc.meta.cover.enabled = false;
+  assert.doesNotMatch(buildTex(doc), /試験時間/);
+});
+
 test('句読点の統一は数式の中を変えない', () => {
   const l = { punct: 'commaPeriod' };
   assert.equal(applyPunct('a、b。$f(x)、y$', l, findMathRanges), 'a，b．$f(x)、y$');

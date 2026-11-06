@@ -416,6 +416,21 @@
           <label>プリアンブル（\newcommand などの定義）<textarea name="preamble" rows="5" spellcheck="false"></textarea></label>
         </fieldset>
         <fieldset>
+          <legend>表紙（試験問題冊子）</legend>
+          <label class="check"><input name="cover.enabled" type="checkbox" /> 表紙を付ける（表紙の次のページを 1 ページ目にします）</label>
+          <div class="two">
+            <label>年度・試験名<input name="cover.header" type="text" placeholder="例: 令和8年度 入学試験問題" /></label>
+            <label>科目<input name="cover.subject" type="text" placeholder="例: 数　学" /></label>
+          </div>
+          <div class="two">
+            <label>対象<input name="cover.target" type="text" placeholder="例: （理系）" /></label>
+            <label>試験時間<input name="cover.time" type="text" placeholder="例: 120分" /></label>
+          </div>
+          <label>注意事項（1 行に 1 項目。{n} は問題数に置き換わります）<textarea name="cover.notes" rows="5"></textarea></label>
+          <label class="check"><input name="cover.idField" type="checkbox" /> 受験番号・氏名の欄を付ける</label>
+          <label>表紙の下に入れる一文<input name="cover.footer" type="text" /></label>
+        </fieldset>
+        <fieldset>
           <legend>TeX 環境（PDF 作成）</legend>
           <div class="engine-row">
             <input name="enginePath" type="text" placeholder="自動検出" />

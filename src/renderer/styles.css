@@ -420,3 +420,21 @@ input.mid { width: 110px; }
 .hn-box.sized { min-width: 0; padding: 0; box-sizing: border-box; vertical-align: middle; }
 .page .sh-body { letter-spacing: var(--letter-space, normal); }
 .ld-margins input { width: 72px; }
+
+/* ---------- 表紙 ---------- */
+.cover-page { display: flex; flex-direction: column; min-height: calc(var(--paper-h, 257mm)); font-family: var(--sans); }
+.cover-page .cv-top { text-align: center; margin-top: 12mm; }
+.cv-header { font-size: 15pt; margin-bottom: 16mm; }
+.cv-subject { font-size: 34pt; font-weight: 700; margin-bottom: 6mm; }
+.cv-target { font-size: 15pt; margin-bottom: 8mm; }
+.cv-time { font-size: 12pt; }
+.cv-notes { margin-top: 14mm; font-family: var(--serif); }
+.cv-notes-title { font-family: var(--sans); font-weight: 700; margin-bottom: 2mm; }
+.cv-notes ol { padding-left: 2.2em !important; margin: 0; }
+.cv-notes li { margin-bottom: 1mm; }
+.cv-bottom { margin-top: auto; text-align: center; }
+.cv-id { margin: 0 auto 6mm; border-collapse: collapse; }
+.cv-id th, .cv-id td { border: 1px solid #333; height: 12mm; padding: 0 3mm; font-weight: 400; }
+.cv-id td { width: 62mm; }
+.cv-footer { font-weight: 700; }
+@media print { #print-root .cover-page { break-after: page; } }
