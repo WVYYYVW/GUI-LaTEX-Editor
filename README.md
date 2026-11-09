@@ -96,6 +96,12 @@ npm run dist:mac
 
 macOS 版は Mac 上でビルドする必要があります。`v` で始まるタグ（例: `v0.2.0`）を push すると、GitHub Actions（`.github/workflows/build.yml`）が Windows / macOS 両方のインストーラーを作り、そのタグの Release に添付します（コード署名はしていないため、初回起動時に OS の警告が出ます）。
 
+macOS 版は Apple シリコン（`mac-arm64`）と Intel（`mac-x64`）の 2 種類を作ります。Apple の証明書がないためアドホック署名のみです。初回はアプリを右クリック →「開く」、または「システム設定」→「プライバシーとセキュリティ」→「このまま開く」で起動します。「壊れているため開けません」と出る場合は次を実行してください。
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/LaTeX Problem Editor.app"
+```
+
 ## ファイル形式
 
 問題集は `.mathprob`（JSON）で保存します。問題文・解答は LaTeX のテキスト、レイアウトは `meta.layout`、問題ごとの配置は `problems[].layout` に入ります。
