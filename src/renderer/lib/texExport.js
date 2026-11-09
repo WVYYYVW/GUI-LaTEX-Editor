@@ -2,10 +2,14 @@
 
 import { normalizeLayout, texLayoutPreamble, texProblemOpen, texSubLabel, pointsText, applyPunct } from './layout.js';
 import { findMathRanges } from './mathRanges.js';
+import { CHEM_PREAMBLE, expandScience } from './chem.js';
 
 const MARK = '% @@';
 
 const ensureNl = (s) => (s.endsWith('\n') ? s : s + '\n');
+
+// 化学式・単位は書き出し時に普通の LaTeX に置き換える（expandScience）。mhchem・siunitx が無い TeX でも組める
+export const TEX_SCIENCE = CHEM_PREAMBLE;
 
 export function buildTex(doc) {
   const m = doc.meta;
@@ -18,6 +22,8 @@ export function buildTex(doc) {
   L.push('\\usepackage{graphicx}');
   L.push('\\usepackage{xcolor}');
   L.push('\\IfFileExists{tikz.sty}{\\usepackage{tikz}\\usetikzlibrary{arrows.meta,calc,intersections}}{}');
+  // 化学式（\ce{H2O}）と単位（\qty{9.8}{m/s^2}, \unit{N}）。パッケージが無い環境でも同じ書き方で組めるようにする
+  L.push(...TEX_SCIENCE);
   // 小問番号。enumitem が無い TeX 環境でも [label=(\arabic*)] / (\alph*) / (\roman*) が使えるようにする
   const sub = texSubLabel(lay);
   L.push('\\newcommand{\\lpekata}[1]{\\ifcase\\value{#1}\\or ア\\or イ\\or ウ\\or エ\\or オ\\or カ\\or キ\\or ク\\or ケ\\or コ\\or サ\\or シ\\fi}');
@@ -71,14 +77,14 @@ export function buildTex(doc) {
     // 段落の 1 字下げは、見出し直後の最初の段落にも付ける（文章で始まるときだけ）
     if (lay.parIndent && lay.head.position !== 'inline' && /^\s*[^\s\\$]/.test(p.body || '')) L.push('\\hspace*{\\parindent}%');
     L.push(`${MARK} problem ${n} body`);
-    L.push(ensureNl(applyPunct(p.body || '', lay, findMathRanges)).replace(/\n$/, ''));
+    L.push(ensureNl(expandScience(applyPunct(p.body || '', lay, findMathRanges))).replace(/\n$/, ''));
     L.push(`${MARK} fixed`);
     if (lay.pointsStyle === 'bodyEnd' && pointsText(lay, p.points)) L.push(`\\unskip\\ ${pointsText(lay, p.points)}`);
     L.push('\\par');
     if (m.answerMode === 'after' && (p.solution || '').trim()) {
       L.push('\\medskip\\noindent{\\bfseries 【解答】}\\par');
       L.push(`${MARK} problem ${n} solution`);
-      L.push(ensureNl(applyPunct(p.solution, lay, findMathRanges)).replace(/\n$/, ''));
+      L.push(ensureNl(expandScience(applyPunct(p.solution, lay, findMathRanges))).replace(/\n$/, ''));
       L.push(`${MARK} fixed`);
       L.push('\\par');
     }
@@ -104,7 +110,7 @@ export function buildTex(doc) {
       const n = i + 1;
       L.push(`\\par\\medskip\\noindent{\\lpeheadfont\\lpenum{${n}}}${p.title ? `\\quad{\\bfseries ${p.title}}` : ''}\\par\\nopagebreak`);
       L.push(`${MARK} problem ${n} solution`);
-      L.push(ensureNl(applyPunct(p.solution, lay, findMathRanges)).replace(/\n$/, ''));
+      L.push(ensureNl(expandScience(applyPunct(p.solution, lay, findMathRanges))).replace(/\n$/, ''));
       L.push(`${MARK} fixed`);
       L.push('\\par');
     });

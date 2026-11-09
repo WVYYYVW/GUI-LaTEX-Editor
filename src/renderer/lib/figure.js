@@ -4,6 +4,7 @@
 //   \begin{center} ... \end{center}
 //   % @endfig
 import katex from 'katex';
+import { SCIENCE_MACROS, normalizeNumbers } from './chem.js';
 
 // ---------------- 式の解析 ----------------
 const FUNCS = {
@@ -257,6 +258,138 @@ export function autoAnchor(g, p) {
   return dirs[(Math.round(ang / 45) + 8) % 8];
 }
 
+// ---------------- 物理の部品（ばね・抵抗・コンデンサー・電池・力の矢印・床など） ----------------
+// 2 点 a → b の間に置く部品を、線（lines）と塗り（fills: 白で塗って黒で縁取る / 黒で塗る）の図形にする。
+// TikZ と SVG の両方をこの図形から作るので、プレビューと PDF の形が一致する。
+
+/** 部品の種類（作図の道具と同じ順） */
+export const PARTS = [
+  { id: 'line', name: '線分' },
+  { id: 'arrow', name: '矢印（力）' },
+  { id: 'spring', name: 'ばね' },
+  { id: 'resistor', name: '抵抗' },
+  { id: 'capacitor', name: 'コンデンサー' },
+  { id: 'battery', name: '電池' },
+  { id: 'coil', name: 'コイル' },
+  { id: 'switch', name: 'スイッチ' },
+  { id: 'wall', name: '床・壁' },
+  { id: 'rect', name: '物体（長方形）' },
+  { id: 'dim', name: '寸法線' },
+];
+
+const P2 = (x, y) => ({ x: r3(x), y: r3(y) });
+
+/**
+ * @returns {{lines:{x:number,y:number}[][], fills:{pts:{x:number,y:number}[], black?:boolean}[], label?:{x:number,y:number}}}
+ */
+export function partShapes(kind, a, b, opt = {}) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1e-9;
+  const ux = dx / len;
+  const uy = dy / len;
+  // 進む向きの左側を正とする法線（flip で反対側）
+  const s = opt.flip ? -1 : 1;
+  const nx = -uy * s;
+  const ny = ux * s;
+  const at = (t, n = 0) => P2(a.x + ux * t + nx * n, a.y + uy * t + ny * n);
+  const lines = [];
+  const fills = [];
+  const mid = len / 2;
+  // 中央に長さ w の部品を置き、両側を導線でつなぐ
+  const leads = (w) => {
+    const h = Math.min(w, len) / 2;
+    lines.push([at(0), at(mid - h)], [at(mid + h), at(len)]);
+    return [mid - h, mid + h];
+  };
+  const head = (tipT, back = 1) => {
+    // 矢じり（黒の三角形）。tipT の位置が先端、back=-1 で逆向き
+    const L = Math.min(0.26, len * 0.4);
+    const W = 0.09;
+    const base = tipT - L * back;
+    fills.push({ pts: [at(tipT), at(base, W), at(base, -W)], black: true });
+    return base;
+  };
+  switch (kind) {
+    case 'arrow': {
+      const base = head(len);
+      lines.push([at(0), at(base + 0.02)]);
+      break;
+    }
+    case 'dim': {
+      const b1 = head(0, -1);
+      const b2 = head(len);
+      lines.push([at(b1 - 0.02), at(b2 + 0.02)]);
+      break;
+    }
+    case 'spring': {
+      const lead = Math.min(0.2, len * 0.12);
+      const n = Math.max(4, Math.min(16, Math.round((len - 2 * lead) / 0.16)));
+      const step = (len - 2 * lead) / n;
+      const pts = [at(0), at(lead)];
+      for (let i = 0; i < n; i++) pts.push(at(lead + step * (i + 0.5), i % 2 ? -0.14 : 0.14));
+      pts.push(at(len - lead), at(len));
+      lines.push(pts);
+      break;
+    }
+    case 'resistor': {
+      const [t0, t1] = leads(Math.min(0.8, len * 0.6));
+      fills.push({ pts: [at(t0, 0.13), at(t1, 0.13), at(t1, -0.13), at(t0, -0.13)] });
+      break;
+    }
+    case 'capacitor': {
+      const [t0, t1] = leads(0.16);
+      lines.push([at(t0, 0.32), at(t0, -0.32)], [at(t1, 0.32), at(t1, -0.32)]);
+      break;
+    }
+    case 'battery': {
+      // a 側が長い極板（正極）、b 側が短く太い極板（負極）
+      const [t0, t1] = leads(0.16);
+      lines.push([at(t0, 0.34), at(t0, -0.34)]);
+      fills.push({ pts: [at(t1 - 0.025, 0.17), at(t1 + 0.025, 0.17), at(t1 + 0.025, -0.17), at(t1 - 0.025, -0.17)], black: true });
+      break;
+    }
+    case 'coil': {
+      const w = Math.min(1.2, len * 0.7);
+      const [t0] = leads(w);
+      const loops = 4;
+      const r = w / loops / 2;
+      const pts = [];
+      for (let i = 0; i < loops; i++) {
+        for (let k = 0; k <= 12; k++) {
+          const th = Math.PI - (Math.PI * k) / 12;
+          pts.push(at(t0 + r * (2 * i + 1) + r * Math.cos(th), r * 1.15 * Math.sin(th)));
+        }
+      }
+      lines.push(pts);
+      break;
+    }
+    case 'switch': {
+      const w = Math.min(0.7, len * 0.6);
+      const [t0, t1] = leads(w);
+      lines.push([at(t0), at(t1 - 0.05, 0.3)]);
+      // 接点（小さな白丸の代わりに短い縦線）
+      lines.push([at(t1, 0.06), at(t1, -0.06)]);
+      break;
+    }
+    case 'wall': {
+      lines.push([at(0), at(len)]);
+      // 斜線（法線の反対側＝進む向きの右側。左→右に引いた床なら下側）
+      const step = 0.2;
+      for (let t = 0.05; t <= len - 0.05 + 1e-9; t += step) lines.push([at(t, 0), at(t - 0.14, -0.16)]);
+      break;
+    }
+    case 'rect': {
+      fills.push({ pts: [P2(a.x, a.y), P2(b.x, a.y), P2(b.x, b.y), P2(a.x, b.y)] });
+      return { lines, fills, label: opt.label ? P2((a.x + b.x) / 2, (a.y + b.y) / 2) : undefined, center: true };
+    }
+    default:
+      lines.push([at(0), at(len)]);
+  }
+  const off = kind === 'capacitor' || kind === 'battery' ? 0.62 : kind === 'line' || kind === 'arrow' || kind === 'dim' || kind === 'wall' ? 0.3 : 0.45;
+  return { lines, fills, label: opt.label ? at(mid, off) : undefined };
+}
+
 // ---------------- TikZ ----------------
 const texLabel = (s) => (s || '').trim();
 
@@ -329,7 +462,25 @@ export function figureToTikz(spec) {
     L.push(`  \\draw[gray!35, very thin, step=1] (${Math.floor(b.xmin)},${Math.floor(b.ymin)}) grid (${Math.ceil(b.xmax)},${Math.ceil(b.ymax)});`);
   }
   for (const p of g.points) L.push(`  \\coordinate (${p.id}) at (${r3(p.x)},${r3(p.y)});`);
-  for (const s of g.segments) if (P(s.a) && P(s.b)) L.push(`  \\draw${s.dashed ? '[dashed]' : ''} (${s.a}) -- (${s.b});`);
+  const pt = (p) => `(${p.x},${p.y})`;
+  for (const s of g.segments) {
+    const A = P(s.a);
+    const B = P(s.b);
+    if (!A || !B) continue;
+    if (!s.kind || s.kind === 'line') {
+      L.push(`  \\draw${s.dashed ? '[dashed]' : ''} (${s.a}) -- (${s.b});`);
+      if (s.label) {
+        const sh = partShapes('line', A, B, { label: s.label, flip: s.flip });
+        L.push(`  \\node at ${pt(sh.label)} {${texLabel(s.label)}};`);
+      }
+      continue;
+    }
+    const sh = partShapes(s.kind, A, B, { label: s.label, flip: s.flip });
+    const opt = `line width=0.6pt, line join=round${s.dashed ? ', dashed' : ''}`;
+    for (const ln of sh.lines) L.push(`  \\draw[${opt}] ${ln.map(pt).join(' -- ')};`);
+    for (const f of sh.fills) L.push(`  ${f.black ? '\\fill' : `\\filldraw[fill=white, ${opt}]`} ${f.pts.map(pt).join(' -- ')} -- cycle;`);
+    if (sh.label) L.push(`  \\node at ${pt(sh.label)} {${texLabel(s.label)}};`);
+  }
   for (const c of g.circles) {
     const ctr = P(c.c);
     const on = P(c.p);
@@ -374,7 +525,9 @@ function labelHtml(s) {
   const t = (s || '').trim();
   if (!t) return '';
   // $...$ を含めば数式、そうでなければそのまま
-  return t.replace(/\$([^$]+)\$/g, (_m, tex) => katex.renderToString(tex, { throwOnError: false, strict: 'ignore' })).replace(/^([^<]*)$/, (m) => escX(m));
+  return t
+    .replace(/\$([^$]+)\$/g, (_m, tex) => katex.renderToString(normalizeNumbers(tex), { throwOnError: false, strict: 'ignore', macros: { ...SCIENCE_MACROS } }))
+    .replace(/^([^<]*)$/, (m) => escX(m));
 }
 
 /** pos（TikZ のアンカー名）→ ラベルのずらし方 */
@@ -486,7 +639,26 @@ export function figureToSvg(spec, opts = {}) {
     g.segments.forEach((s, i) => {
       const a = P(s.a);
       const bb = P(s.b);
-      if (a && bb) parts.push(`<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(bb.x)}" y2="${Y(bb.y)}" ${stroke} stroke-width="1.2"${s.dashed ? ' stroke-dasharray="5 4"' : ''} data-seg="${i}"/>`);
+      if (!a || !bb) return;
+      const dash = s.dashed ? ' stroke-dasharray="5 4"' : '';
+      if (!s.kind || s.kind === 'line') {
+        parts.push(`<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(bb.x)}" y2="${Y(bb.y)}" ${stroke} stroke-width="1.2"${dash} data-seg="${i}"/>`);
+        if (s.label) {
+          const lp = partShapes('line', a, bb, { label: s.label, flip: s.flip }).label;
+          parts.push(svgLabel(X(lp.x), Y(lp.y), 'center', labelHtml(s.label)));
+        }
+        return;
+      }
+      const sh = partShapes(s.kind, a, bb, { label: s.label, flip: s.flip });
+      const pts = (arr) => arr.map((p) => `${X(p.x)},${Y(p.y)}`).join(' ');
+      let gEl = `<g data-seg="${i}" class="fig-part">`;
+      // 当たり判定を広げるための透明な太線（削除のクリックを拾いやすくする）
+      if (opts.interactive) gEl += `<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(bb.x)}" y2="${Y(bb.y)}" stroke="transparent" stroke-width="12" data-seg="${i}"/>`;
+      for (const ln of sh.lines) gEl += `<polyline points="${pts(ln)}" ${stroke} stroke-width="1.2" stroke-linejoin="round"${dash} data-seg="${i}"/>`;
+      for (const f of sh.fills) gEl += `<polygon points="${pts(f.pts)}" fill="${f.black ? '#1d1d1b' : '#fff'}" stroke="#1d1d1b" stroke-width="${f.black ? 0.5 : 1.2}"${dash} data-seg="${i}"/>`;
+      gEl += '</g>';
+      parts.push(gEl);
+      if (sh.label) parts.push(svgLabel(X(sh.label.x), Y(sh.label.y), 'center', labelHtml(s.label)));
     });
     for (const p of g.points) {
       if (p.dot !== false || opts.interactive) parts.push(`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${opts.interactive ? 5 : 2.2}" fill="${p.dot === false ? '#bbb' : '#1d1d1b'}" data-pid="${escX(p.id)}" class="${opts.interactive ? 'fig-handle' : ''}"/>`);

@@ -294,7 +294,8 @@ export function aiTextToLatex(text, opts = {}) {
   // コードブロック: ```latex / ```tex は中身をそのまま LaTeX として採用、それ以外は verbatim
   const blocks = [];
   text = text.replace(/```([a-zA-Z]*)\n([\s\S]*?)```/g, (_m, lang, body) => {
-    const isTex = /^(la)?tex|math$/i.test(lang) || (!lang && /\\(begin|frac|int|sum)/.test(body));
+    // 言語名なしのコードブロックも、LaTeX の命令・$・問題の区切り（【問題1】）があれば LaTeX とみなす
+    const isTex = /^(la)?tex|math$/i.test(lang) || (!lang && /\\[a-zA-Z]|\$|【(?:問題|解答)\s*\d/.test(body));
     blocks.push(isTex ? body.replace(/\n$/, '') : `\\begin{verbatim}\n${body}\\end{verbatim}`);
     return `\n\u0004${blocks.length - 1}\u0004\n`;
   });
@@ -307,7 +308,8 @@ export function aiTextToLatex(text, opts = {}) {
     joined += text.slice(last, r.from);
     let inner = normalizeMathText(r.latex.trim());
     let rendered;
-    if (r.kind === 'env') rendered = normalizeMathText(r.latex);
+    if (r.kind === 'cmd') rendered = r.latex; // \ce{…} / \qty{…}{…} はそのまま（文章中に書いてよい）
+    else if (r.kind === 'env') rendered = normalizeMathText(r.latex);
     else if (r.display) rendered = opts.displayStyle === 'dollar' ? `$$\n  ${inner}\n$$` : `\\[\n  ${inner}\n\\]`;
     else rendered = `$${inner}$`;
     if (r.display) {

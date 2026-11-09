@@ -3,15 +3,16 @@ import './styles.css';
 import { MathfieldElement } from 'mathlive';
 import katex from 'katex';
 import { createEditor } from './lib/editor.js';
-import { renderLatex, renderSheet, renderInline, collectMacros } from './lib/preview.js';
+import { renderLatex, renderSheet, renderInline, renderMath, collectMacros, contentStyle } from './lib/preview.js';
 import { buildTex, locateLine } from './lib/texExport.js';
 import { PALETTE } from './lib/palette.js';
 import { newDocument, newProblem, normalizeDoc } from './lib/model.js';
 import { findMathRanges, rangeAt, normalizeMathText } from './lib/mathRanges.js';
 import { clipboardToLatex, aiTextToLatex, htmlHasTex } from './lib/smartPaste.js';
+import { buildAiPrompt, splitAiProblems, parseMathprobText } from './lib/aiPrompt.js';
 import { latexToMathML } from './lib/wordExport.js';
 import { initLayoutPanel, fitPages, enableSpaceDrag } from './layoutPanel.js';
-import { paperSize, normalizeLayout } from './lib/layout.js';
+import { paperSize, normalizeLayout, SUBJECTS } from './lib/layout.js';
 import { initFigureDialog } from './figureDialog.js';
 import { figureBlock, findFigures } from './lib/figure.js';
 import { setImageResolver } from './lib/preview.js';
@@ -34,7 +35,7 @@ const state = {
   field: 'body',
   dirty: false,
   previewMode: 'problem',
-  macros: {},
+  macros: collectMacros(''),
   filter: '',
   settings: {},
   engine: null,
@@ -313,8 +314,9 @@ function renderPreview() {
       return;
     }
     const n = currentIndex() + 1;
+    const cs = contentStyle(state.doc.meta.layout);
     el.innerHTML =
-      `<div class="paper">` +
+      `<div class="paper ${cs.classes.join(' ')}" style="${cs.vars}">` +
       `<h3 class="pv-section">問題 ${n}${p.title ? `　${renderInline(p.title, state.macros)}` : ''}</h3>` +
       renderLatex(p.body, state.macros, { field: 'body' }) +
       `<h3 class="pv-section">解答・解説</h3>` +
@@ -400,6 +402,13 @@ document.addEventListener('click', () => $('#ctx-menu').classList.add('hidden'))
 
 // ---------------- 記号パレット ----------------
 let paletteCat = 0;
+/** 文書の科目（物理・化学）に合わせて、記号パレットの欄を切り替える */
+function selectPaletteForSubject() {
+  const subj = state.doc?.meta?.subject || 'math';
+  const i = PALETTE.findIndex((c) => c.subject === subj);
+  paletteCat = i >= 0 ? i : 0;
+  renderPalette();
+}
 function renderPalette() {
   const tabs = $('#palette-tabs');
   tabs.innerHTML = '';
@@ -423,7 +432,7 @@ function renderPalette() {
       b.textContent = item.text;
       b.classList.add('text-item');
     } else {
-      b.innerHTML = katex.renderToString(item.label, { throwOnError: false, strict: 'ignore' });
+      b.innerHTML = renderMath(item.label, false, state.macros);
       if (/matrix|cases|aligned/.test(item.label)) b.classList.add('big');
     }
     b.addEventListener('mousedown', (e) => e.preventDefault()); // エディタのフォーカスを保つ
@@ -596,22 +605,141 @@ function copyWordAtCursor() {
 
 // ---------------- AI の回答を貼り付け ----------------
 let pdTimer;
+/** 貼り付けから検出した問題（【問題1】【解答1】の区切り、または .mathprob の JSON）。無ければ null */
+let pdDetected = null;
 function convertPasteInput() {
   const text = $('#pd-input').value;
+  const json = parseMathprobText(text);
+  if (json) {
+    // .mathprob（JSON）: 中身はすでに LaTeX なので変換しない
+    const doc = normalizeDoc(json);
+    pdDetected = { source: 'json', problems: doc.problems.map((p) => ({ title: p.title, body: p.body, solution: p.solution, tags: p.tags, difficulty: p.difficulty })) };
+    $('#pd-output').value = pdDetected.problems.map((p, i) => `【問題${i + 1}】${p.title ? `（${p.title}）` : ''}\n${p.body}${p.solution.trim() ? `【解答${i + 1}】\n${p.solution}` : ''}`).join('\n');
+    $('#pd-source').textContent = '.mathprob（JSON）';
+    updatePasteTargets();
+    renderPastePreview();
+    return;
+  }
   const out = aiTextToLatex(text, { unicodeMath: $('#pd-unicode').checked });
   $('#pd-output').value = out;
+  detectPasteProblems();
   renderPastePreview();
 }
+/** 変換後の LaTeX に【問題1】の区切りがあれば、問題ごとに分ける */
+function detectPasteProblems() {
+  const list = splitAiProblems($('#pd-output').value);
+  pdDetected = list ? { source: 'marks', problems: list } : null;
+  updatePasteTargets();
+}
+function updatePasteTargets() {
+  const sel = $('#pd-target');
+  const multi = !!pdDetected;
+  for (const o of sel.options) o.hidden = o.hasAttribute('data-multi') ? !multi : multi && o.value !== 'new';
+  const n = pdDetected?.problems.length || 0;
+  const withSol = pdDetected?.problems.filter((p) => p.solution.trim()).length || 0;
+  $('#pd-detect').textContent = multi ? `${n} 問を検出（解答つき ${withSol} 問）` : '';
+  if (multi) {
+    if (sel.selectedOptions[0]?.hidden || !['overwrite', 'append', 'new'].includes(sel.value)) {
+      // 今の問題が空なら上書き、そうでなければ追加を既定にする
+      const cur = currentProblem();
+      sel.value = cur && !cur.body.trim() && !cur.solution.trim() ? 'overwrite' : n === 1 && cur ? 'overwrite' : 'append';
+    }
+    sel.querySelector('option[value="new"]').hidden = true;
+  } else if (sel.selectedOptions[0]?.hidden) {
+    sel.value = currentProblem() ? 'cursor' : 'new';
+  }
+}
 function renderPastePreview() {
+  // 小問番号・部・空欄の形は今のレイアウト / テーマに合わせて表示する
+  const cs = contentStyle(state.doc.meta.layout);
+  $('#pd-preview').className = `preview pd-preview ${cs.classes.join(' ')}`;
+  $('#pd-preview').style.cssText = cs.vars;
+  if (pdDetected) {
+    $('#pd-preview').innerHTML = pdDetected.problems
+      .map(
+        (p, i) =>
+          `<div class="pd-pv-head">問題 ${i + 1}${p.title ? `　${escapeHtml(p.title)}` : ''}</div>${renderLatex(p.body, state.macros)}` +
+          (p.solution.trim() ? `<div class="pd-pv-head sol">解答 ${i + 1}</div>${renderLatex(p.solution, state.macros)}` : '')
+      )
+      .join('');
+    return;
+  }
   $('#pd-preview').innerHTML = renderLatex($('#pd-output').value, state.macros);
 }
-async function openPasteDialog() {
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// ---- AI に渡すプロンプト ----
+function promptOptions() {
+  const saved = state.settings?.aiPrompt || {};
+  return {
+    withSolution: saved.withSolution !== false,
+    subject: saved.subject || state.doc.meta.subject || 'math',
+    format: saved.format || 'paste',
+    request: saved.request || '',
+  };
+}
+let pdPrompt = null;
+function renderPromptPanel() {
+  const o = pdPrompt;
+  const segOn = (id, v) => $$(`#${id} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === String(v)));
+  segOn('pd-p-solution', o.withSolution);
+  segOn('pd-p-subject', o.subject);
+  segOn('pd-p-format', o.format);
+  $('#pd-p-format-hint').textContent =
+    o.format === 'mathprob'
+      ? 'ファイルを作れる AI 向け。できたファイルを「ファイル → 開く」で開くか、JSON をここに貼り付けます。'
+      : 'AI の回答のコードブロックをコピーして、下の欄に貼り付けます。';
+  if (document.activeElement !== $('#pd-p-request')) $('#pd-p-request').value = o.request;
+  $('#pd-p-text').value = buildAiPrompt(o);
+  $('#pd-p-copied').textContent = '';
+}
+function savePromptOptions() {
+  state.settings.aiPrompt = { ...pdPrompt };
+  api.setSettings({ aiPrompt: state.settings.aiPrompt }).catch(() => {});
+}
+function togglePromptPanel(open) {
+  const panel = $('#pd-prompt');
+  const show = open ?? panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !show);
+  $('#pd-prompt-toggle').setAttribute('aria-expanded', String(show));
+  $('#pd-prompt-toggle').textContent = show ? 'AI に渡すプロンプトを閉じる ▴' : 'AI に渡すプロンプトを作る ▾';
+  if (show) {
+    pdPrompt = promptOptions();
+    renderPromptPanel();
+  }
+}
+$('#pd-prompt-toggle').addEventListener('click', () => togglePromptPanel());
+for (const [id, key] of [['pd-p-solution', 'withSolution'], ['pd-p-subject', 'subject'], ['pd-p-format', 'format']]) {
+  $(`#${id}`).addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]');
+    if (!b) return;
+    pdPrompt[key] = key === 'withSolution' ? b.dataset.v === 'true' : b.dataset.v;
+    savePromptOptions();
+    renderPromptPanel();
+  });
+}
+$('#pd-p-request').addEventListener('input', () => {
+  pdPrompt.request = $('#pd-p-request').value;
+  $('#pd-p-text').value = buildAiPrompt(pdPrompt);
+  clearTimeout(pdTimer);
+  pdTimer = setTimeout(savePromptOptions, 400);
+});
+$('#pd-p-copy').addEventListener('click', async () => {
+  await api.writeClipboard({ text: $('#pd-p-text').value });
+  $('#pd-p-copied').textContent = 'コピーしました。AI に貼り付けて送ってください';
+});
+
+async function openPasteDialog(opts = {}) {
   $('#pd-input').value = '';
   $('#pd-output').value = '';
   $('#pd-preview').innerHTML = '';
   $('#pd-source').textContent = '';
+  pdDetected = null;
+  updatePasteTargets();
   $('#pd-target').value = currentProblem() ? 'cursor' : 'new';
+  togglePromptPanel(!!opts.prompt);
   $('#paste-dialog').classList.remove('hidden');
+  if (opts.prompt) return;
   // クリップボードに内容があれば最初から読み込む
   try {
     const clip = await api.readClipboard();
@@ -624,8 +752,10 @@ async function openPasteDialog() {
 function loadPasteClipboard(clip) {
   const { latex, source } = clipboardToLatex(clip, { unicodeMath: $('#pd-unicode').checked });
   $('#pd-input').value = clip.text || '';
+  if (parseMathprobText(clip.text || '')) return convertPasteInput();
   $('#pd-output').value = latex;
   $('#pd-source').textContent = source === 'html' ? '表示された回答（数式つき HTML）' : 'テキスト / Markdown';
+  detectPasteProblems();
   renderPastePreview();
 }
 $('#pd-input').addEventListener('paste', (e) => {
@@ -648,12 +778,46 @@ $('#pd-input').addEventListener('input', () => {
 $('#pd-unicode').addEventListener('change', convertPasteInput);
 $('#pd-output').addEventListener('input', () => {
   clearTimeout(pdTimer);
-  pdTimer = setTimeout(renderPastePreview, 200);
+  pdTimer = setTimeout(() => {
+    // 手で直した内容から区切りを読み直す（JSON から読んだときも、表示している区切りの形で読み直せる）
+    detectPasteProblems();
+    renderPastePreview();
+  }, 200);
 });
 $('#pd-cancel').addEventListener('click', () => $('#paste-dialog').classList.add('hidden'));
 $('#pd-ok').addEventListener('click', () => {
   const latex = $('#pd-output').value;
   const target = $('#pd-target').value;
+  if (pdDetected && (target === 'overwrite' || target === 'append')) {
+    const list = pdDetected.problems;
+    const extra = (p) => (pdDetected.source === 'json' ? { tags: p.tags || [], difficulty: p.difficulty || 0 } : {});
+    let at = currentIndex();
+    let first = 0;
+    const cur = currentProblem();
+    if (target === 'overwrite' && cur) {
+      // 1 問目で今の問題の問題文・解答（と題名）を上書きする
+      const p = list[0];
+      cur.body = p.body;
+      cur.solution = p.solution;
+      if (p.title) cur.title = p.title;
+      Object.assign(cur, extra(p));
+      first = 1;
+    }
+    let lastId = cur?.id ?? null;
+    for (const p of list.slice(first)) {
+      const np = newProblem({ title: p.title, body: p.body, solution: p.solution, ...extra(p) });
+      state.doc.problems.splice(++at, 0, np);
+      lastId = np.id;
+    }
+    $('#paste-dialog').classList.add('hidden');
+    setDirty(true);
+    editor.reset();
+    renderList();
+    selectProblem(target === 'overwrite' && cur ? cur.id : lastId, 'body');
+    renderPreview();
+    toast(`${list.length} 問を取り込みました（問題文と解答）`);
+    return;
+  }
   $('#paste-dialog').classList.add('hidden');
   if (!latex.trim()) return;
   if (target === 'new' || !currentProblem()) {
@@ -687,6 +851,7 @@ function loadDocument(data, filePath) {
   setDirty(false);
   renderList();
   selectProblem(state.doc.problems[0]?.id ?? null, 'body');
+  selectPaletteForSubject();
 }
 
 async function confirmDiscard() {
@@ -885,10 +1050,21 @@ form.addEventListener('submit', async (e) => {
   m.showDifficulty = form.elements.namedItem('showDifficulty').checked;
   m.nameField = form.elements.namedItem('nameField').checked;
   m.preamble = form.elements.namedItem('preamble').value;
+  const prevSubject = m.subject || 'math';
+  m.subject = form.elements.namedItem('subject').value;
   m.cover = { ...(m.cover || {}) };
   for (const k of ['enabled', 'header', 'subject', 'target', 'time', 'notes', 'idField', 'footer']) {
     const el = form.elements.namedItem(`cover.${k}`);
     if (el) m.cover[k] = el.type === 'checkbox' ? el.checked : el.value;
+  }
+  if (m.subject !== prevSubject) {
+    // 表紙の科目名が前の科目の既定のままなら、新しい科目に合わせる
+    const name = (id) => SUBJECTS.find((s) => s.id === id)?.cover;
+    if (!m.cover.subject || m.cover.subject === name(prevSubject)) m.cover.subject = name(m.subject);
+    // 題名が既定（「数学 演習プリント」など）のままなら、科目名も合わせる
+    const short = (id) => SUBJECTS.find((s) => s.id === id)?.name;
+    if (m.title === `${short(prevSubject)} 演習プリント`) m.title = `${short(m.subject)} 演習プリント`;
+    selectPaletteForSubject();
   }
   if (JSON.stringify(m) !== before) setDirty(true);
   state.macros = collectMacros(m.preamble);
@@ -937,7 +1113,7 @@ const figureDialog = initFigureDialog({
 });
 
 /** 図を挿入、またはカーソル位置／指定位置の図を編集 */
-function openFigure(target) {
+function openFigure(target, newType) {
   if (!currentProblem()) return;
   const text = editor.getText();
   const pos = editor.getSelection().from;
@@ -952,7 +1128,7 @@ function openFigure(target) {
       editor.replace(sel.from, sel.to, `${lead}${block}\n`);
     }
     toast(fig ? '図を更新しました' : '図を挿入しました');
-  });
+  }, { newType });
 }
 $('#preview').addEventListener('dblclick', (e) => {
   const el = e.target.closest('.pv-fig[data-field]');
@@ -1010,6 +1186,8 @@ const layoutPanel = initLayoutPanel({
     setDirty(true);
     renderPreview();
     syncProblemLayout();
+    // 物理・化学のテーマを選んだら記号パレットも合わせる
+    if (PALETTE[paletteCat]?.subject !== state.doc.meta.subject && PALETTE.some((c) => c.subject === state.doc.meta.subject)) selectPaletteForSubject();
   },
   getUserThemes: () => state.settings.userThemes || [],
   saveUserThemes: async (list) => {
@@ -1045,6 +1223,8 @@ const actions = {
   settings: openSettings,
   layout: () => layoutPanel.open(),
   figure: () => openFigure(),
+  // 物理パレットから：作図（ばね・回路・力の矢印）で開く
+  'figure-geo': () => openFigure(null, 'geo'),
   'import-docx': importDocx,
   'import-docx-solution': importDocxSolution,
   'add-problem': addProblem,
@@ -1053,7 +1233,8 @@ const actions = {
   'move-up': () => currentProblem() && moveProblem(state.selectedId, currentIndex() - 1),
   'move-down': () => currentProblem() && currentIndex() < state.doc.problems.length - 1 && moveProblem(state.selectedId, currentIndex() + 1),
   'math-editor': () => openMathEditor(),
-  'smart-paste': openPasteDialog,
+  'smart-paste': () => openPasteDialog(),
+  'ai-prompt': () => openPasteDialog({ prompt: true }),
   'copy-word': copyWordAtCursor,
   undo: () => (editor.hasFocus() ? editor.undo() : document.execCommand('undo')),
   redo: () => (editor.hasFocus() ? editor.redo() : document.execCommand('redo')),

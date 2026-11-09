@@ -4,6 +4,8 @@
 
 const m = (label, insert = label, title) => ({ kind: 'math', label, insert, title });
 const t = (text, insert, title) => ({ kind: 'text', text, insert, title });
+// 化学式・単位（\ce, \qty, \unit）: ボタンは式として表示し、文章中でも $ で包まずにそのまま挿入する
+const c = (label, insert = label, title) => ({ kind: 'sci', label, insert, title });
 
 export const PALETTE = [
   {
@@ -74,6 +76,58 @@ export const PALETTE = [
     ],
   },
   {
+    name: '物理',
+    subject: 'physics',
+    items: [
+      c('\\qty{9.8}{m/s^2}', '\\qty{‸}{}', '数値＋単位 \\qty{数値}{単位}'),
+      c('\\unit{m/s}', '\\unit{‸}', '単位だけ（立体で組む）'),
+      c('\\qty{2.0}{\\kilo\\ohm}', '\\qty{‸}{\\kilo\\ohm}', '抵抗 kΩ'),
+      c('\\unit{N}', '\\unit{N}'), c('\\unit{J}', '\\unit{J}'), c('\\unit{W}', '\\unit{W}'), c('\\unit{Pa}', '\\unit{Pa}'),
+      c('\\unit{V}', '\\unit{V}'), c('\\unit{A}', '\\unit{A}'), c('\\unit{\\ohm}', '\\unit{\\ohm}', 'Ω'), c('\\unit{F}', '\\unit{F}'),
+      c('\\unit{T}', '\\unit{T}'), c('\\unit{Hz}', '\\unit{Hz}'), c('\\unit{K}', '\\unit{K}'), c('\\unit{mol}', '\\unit{mol}'),
+      c('\\unit{\\degreeCelsius}', '\\unit{\\degreeCelsius}', '℃'),
+      m('1.0\\times10^{3}', '‸\\times10^{}', '有効数字の表し方'),
+      m('\\vec{F}', '\\vec{‸}', 'ベクトル'),
+      m('\\overrightarrow{v}', '\\overrightarrow{‸}'),
+      m('\\bm{F}', '\\bm{‸}', '太字のベクトル'),
+      m('\\left|\\vec{v}\\right|', '\\left|\\vec{‸}\\right|', 'ベクトルの大きさ'),
+      m('\\dot{x}', '\\dot{‸}', '時間微分'), m('\\ddot{x}', '\\ddot{‸}', '2 階の時間微分'),
+      m('\\frac{dv}{dt}', '\\frac{d‸}{dt}'), m('\\frac{\\Delta x}{\\Delta t}', '\\frac{\\Delta ‸}{\\Delta t}'),
+      m('\\Delta'), m('\\propto'), m('\\fallingdotseq'), m('\\approx'), m('\\ll'), m('\\gg'),
+      m('g'), m('\\hbar'), m('\\varepsilon_{0}', '\\varepsilon_{0}', '真空の誘電率'), m('\\mu_{0}', '\\mu_{0}', '真空の透磁率'),
+      m('k_{\\mathrm{B}}', 'k_{\\mathrm{B}}', 'ボルツマン定数'), m('N_{\\mathrm{A}}', 'N_{\\mathrm{A}}', 'アボガドロ定数'),
+      m('\\omega'), m('\\lambda'), m('\\theta'), m('\\phi'),
+      m('\\sin\\omega t', '\\sin\\omega t'), m('\\frac{1}{2}mv^{2}', '\\frac{1}{2}mv^{2}', '運動エネルギー'),
+      { kind: 'action', text: '🧲 図（ばね・回路・力）…', action: 'figure-geo', insert: '', title: '作図でばね・抵抗・コンデンサー・電池・力の矢印・床などを描く' },
+    ],
+  },
+  {
+    name: '化学',
+    subject: 'chemistry',
+    items: [
+      c('\\ce{H2O}', '\\ce{‸}', '化学式 \\ce{…}（H2O, SO4^2-, Cu^2+ などと書く）'),
+      c('\\ce{->}', ' -> ', '反応の矢印（\\ce の中で）'),
+      c('\\ce{<=>}', ' <=> ', '可逆反応（\\ce の中で）'),
+      c('\\ce{->[\\Delta]}', ' ->[‸] ', '条件付きの矢印（\\ce の中で）'),
+      c('\\ce{^}', ' ^', '気体の発生 ↑（\\ce の中で）'),
+      c('\\ce{v}', ' v', '沈殿 ↓（\\ce の中で）'),
+      c('\\ce{SO4^2-}', '\\ce{SO4^2-}', 'イオン'),
+      c('\\ce{Cu^2+}', '\\ce{Cu^2+}'),
+      c('\\ce{e-}', '\\ce{e-}', '電子'),
+      c('\\ce{CuSO4*5H2O}', '\\ce{CuSO4*5H2O}', '水和物（* で ・）'),
+      c('\\ce{H2O(l)}', '(l)', '状態（\\ce の中で (s)(l)(g)(aq)）'),
+      c('\\ce{^{14}_{6}C}', '\\ce{^{‸}_{}}', '同位体'),
+      c('\\ce{CH3-CH2-OH}', '\\ce{CH3-CH2-OH}', '示性式'),
+      c('\\ce{C=O}', '\\ce{C=O}', '二重結合'),
+      m('\\Delta H', '\\Delta H = \\qty{‸}{kJ/mol}', '反応エンタルピー'),
+      m('K=\\frac{[\\ce{C}]^{c}}{[\\ce{A}]^{a}}', 'K = \\frac{[\\ce{‸}]}{[\\ce{}]}', '平衡定数'),
+      m('\\mathrm{pH}', '\\mathrm{pH}'),
+      c('\\qty{1.0}{mol/L}', '\\qty{‸}{mol/L}', 'モル濃度'),
+      c('\\qty{22.4}{L/mol}', '\\qty{22.4}{L/mol}'),
+      t('原子量の表', '必要があれば，原子量は次の値を用いよ。\\\\\nH $1.0$，C $12$，N $14$，O $16$，Na $23$，Cl $35.5$‸\n', '問題の初めに置く原子量の一覧'),
+    ],
+  },
+  {
     name: 'ギリシャ文字',
     items: [
       'alpha', 'beta', 'gamma', 'delta', 'varepsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu',
@@ -114,6 +168,8 @@ export const PALETTE = [
       t('align* 式変形', '\\begin{align*}\n  ‸ &= \\\\\n    &= \n\\end{align*}', '= で揃える複数行の式'),
       t('(1)(2) 小問', '\\begin{enumerate}\n  \\item ‸\n  \\item \n\\end{enumerate}', '小問。番号の形はレイアウト / テーマの「小問番号」で決まります'),
       t('(a)(b) 小問', '\\begin{enumerate}[label=(\\alph*)]\n  \\item ‸\n  \\item \n\\end{enumerate}'),
+      t('I, II（部）', '\\Part\n‸', '大問の中の区切り（I, II や A, B）。形はレイアウト / テーマの「部」で決まります。\\Part[A] でラベルを指定'),
+      t('空欄 ア', '\\blank{‸ア}', '穴埋めの空欄。形はレイアウト / テーマの「空欄」で決まります'),
       t('・箇条書き', '\\begin{itemize}\n  \\item ‸\n\\end{itemize}'),
       t('太字', '\\textbf{‸}'),
       t('下線', '\\underline{‸}'),

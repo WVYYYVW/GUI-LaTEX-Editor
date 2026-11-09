@@ -102,6 +102,7 @@ function buildMenu() {
         { role: 'selectAll', label: 'すべて選択' },
         { type: 'separator' },
         { label: 'AI の回答を変換して貼り付け', accelerator: 'CmdOrCtrl+Shift+V', click: () => send('smart-paste') },
+        { label: 'AI に渡すプロンプトを作る…', click: () => send('ai-prompt') },
       ],
     },
     {

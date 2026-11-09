@@ -1,5 +1,5 @@
 // 「レイアウト / テーマ」ダイアログと、プレビュー上での直接操作（解答スペースのドラッグ）
-import { HEAD_STYLES, SUB_LABELS, BASE_THEMES, applyTheme, headNumberHtml, normalizeLayout } from './lib/layout.js';
+import { HEAD_STYLES, SUB_LABELS, PART_STYLES, BLANK_STYLES, SUBJECTS, BASE_THEMES, applyTheme, headNumberHtml, normalizeLayout } from './lib/layout.js';
 import { UNIVERSITY_THEMES, UNVERIFIED_UNIVERSITIES } from './lib/universityThemes.js';
 import { renderSheet } from './lib/preview.js';
 
@@ -77,6 +77,7 @@ export function initLayoutPanel(deps) {
   const preview = $('#ld-preview');
   let snapshot = null;
   let previewTimer;
+  let themeSubject = 'math';
 
   const doc = () => deps.getDoc();
   const lay = () => doc().meta.layout;
@@ -99,6 +100,17 @@ export function initLayoutPanel(deps) {
     b.dataset.v = s.id;
     b.textContent = s.name;
     subHost.append(b);
+  }
+
+  // 部の番号・空欄の形
+  for (const [host, list] of [[$('#ld-part-styles'), PART_STYLES], [$('#ld-blank-styles'), BLANK_STYLES]]) {
+    for (const s of list) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.v = s.id;
+      b.textContent = s.name;
+      host.append(b);
+    }
   }
 
   function update(path, value, isMeta = false) {
@@ -196,7 +208,22 @@ export function initLayoutPanel(deps) {
       for (const t of list) host.append(themeCard(t, opts));
     };
     fill($('#ld-themes-base'), BASE_THEMES, {}, '');
-    fill($('#ld-themes-univ'), UNIVERSITY_THEMES, {}, '準備中');
+    // 大学テーマは科目ごとに分けて表示する（最初は文書の科目）
+    const subjOf = (t) => t.meta?.subject || 'math';
+    const sh = $('#ld-theme-subject');
+    sh.innerHTML = '';
+    for (const s of SUBJECTS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = `${s.name}（${UNIVERSITY_THEMES.filter((t) => subjOf(t) === s.id).length}）`;
+      b.classList.toggle('on', s.id === themeSubject);
+      b.addEventListener('click', () => {
+        themeSubject = s.id;
+        renderThemes();
+      });
+      sh.append(b);
+    }
+    fill($('#ld-themes-univ'), UNIVERSITY_THEMES.filter((t) => subjOf(t) === themeSubject), {}, 'この科目のテーマは準備中です。');
     const note = document.createElement('div');
     note.className = 'empty';
     note.textContent = `未対応: ${UNVERIFIED_UNIVERSITIES.map((u) => `${u.name}（${u.reason}）`).join(' ')}`;
@@ -240,6 +267,7 @@ export function initLayoutPanel(deps) {
   // ---------------- 開閉 ----------------
   function open(focus) {
     doc().meta.layout = normalizeLayout(doc().meta.layout);
+    themeSubject = doc().meta.subject || 'math';
     snapshot = structuredClone({ meta: doc().meta, layouts: doc().problems.map((p) => p.layout) });
     dlg.classList.remove('hidden');
     sync();

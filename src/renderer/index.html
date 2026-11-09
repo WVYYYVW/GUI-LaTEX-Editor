@@ -21,6 +21,7 @@
           <button data-action="math-editor" class="accent" title="数式エディタ (Ctrl/⌘+E)">∑ 数式エディタ</button>
           <button data-action="figure" class="accent" title="関数グラフ・図形・画像を挿入">図・グラフ</button>
           <button data-action="smart-paste" class="accent" title="Claude などの回答を変換して取り込む (Ctrl/⌘+Shift+V)">AIの回答を貼り付け</button>
+          <button data-action="ai-prompt" title="AI に問題を作らせるためのプロンプトを作ってコピーする">AI用プロンプト</button>
           <button data-action="copy-word" title="カーソル位置の数式を Word に貼れる形でコピー (Ctrl/⌘+Shift+C)">Word用にコピー</button>
         </div>
         <div class="tb-spacer"></div>
@@ -167,11 +168,35 @@
     <!-- AI の回答を貼り付け -->
     <div id="paste-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pd-title">
       <div class="modal paste-modal">
-        <h2 id="pd-title">AI の回答を取り込む</h2>
+        <div class="pd-head">
+          <h2 id="pd-title">AI の回答を取り込む</h2>
+          <span class="tb-spacer"></span>
+          <button id="pd-prompt-toggle" type="button" aria-expanded="false">AI に渡すプロンプトを作る ▾</button>
+        </div>
+        <div id="pd-prompt" class="pd-prompt hidden">
+          <p class="hint">このプロンプトと依頼を AI（Claude・ChatGPT など）に渡すと、このアプリにそのまま取り込める形で問題を書いてくれます。</p>
+          <div class="ld-row">
+            <span class="ld-k">出力</span>
+            <div class="seg" id="pd-p-solution"><button type="button" data-v="false">問題だけ</button><button type="button" data-v="true">問題と解答</button></div>
+            <span class="ld-k">科目</span>
+            <div class="seg" id="pd-p-subject"><button type="button" data-v="math">数学</button><button type="button" data-v="physics">物理</button><button type="button" data-v="chemistry">化学</button></div>
+            <span class="tb-spacer"></span>
+            <span class="hint" id="pd-p-copied"></span>
+            <button id="pd-p-copy" type="button" class="primary">プロンプトをコピー</button>
+          </div>
+          <div class="ld-row">
+            <span class="ld-k">形式</span>
+            <div class="seg" id="pd-p-format"><button type="button" data-v="paste">貼り付け用</button><button type="button" data-v="mathprob">.mathprob ファイル</button></div>
+            <span class="hint" id="pd-p-format-hint"></span>
+          </div>
+          <label class="pd-req">依頼の内容（空欄なら「〇〇の問題を作ってください」）<textarea id="pd-p-request" rows="2" placeholder="例: 二次関数の最大・最小の問題を 3 題。難易度は入試の標準レベル。"></textarea></label>
+          <textarea id="pd-p-text" class="pd-p-text" rows="7" readonly spellcheck="false"></textarea>
+        </div>
         <p class="hint">
           Claude などの回答をコピーして、下の欄に貼り付けてください（Ctrl/⌘+V）。
           表示された回答をそのまま選択したコピーも、「コピー」ボタンでコピーした Markdown も取り込めます。
           数式は $…$ / \[…\] の LaTeX に、箇条書き・太字・表も LaTeX に変換されます。
+          【問題1】【解答1】の区切りや .mathprob（JSON）を貼ると、問題文と解答をまとめて取り込みます。
         </p>
         <div class="pd-grid">
           <div class="pd-col">
@@ -179,7 +204,7 @@
             <textarea id="pd-input" spellcheck="false" placeholder="ここに貼り付け"></textarea>
           </div>
           <div class="pd-col">
-            <div class="pd-label">変換後の LaTeX（編集できます）</div>
+            <div class="pd-label">変換後の LaTeX（編集できます） <span id="pd-detect" class="badge"></span></div>
             <textarea id="pd-output" spellcheck="false"></textarea>
           </div>
           <div class="pd-col">
@@ -193,6 +218,8 @@
         <div class="actions">
           <span class="pd-target">挿入先：
             <select id="pd-target">
+              <option value="overwrite" data-multi>この問題の問題文と解答を上書き（2 問目以降は後ろに追加）</option>
+              <option value="append" data-multi>検出した問題をすべて新しい問題として追加</option>
               <option value="cursor">カーソル位置</option>
               <option value="body">この問題の問題文（置き換え）</option>
               <option value="solution">この問題の解答（置き換え）</option>
@@ -243,6 +270,7 @@
               <div class="ld-theme-group-label">汎用</div>
               <div id="ld-themes-base" class="theme-cards"></div>
               <div class="ld-theme-group-label">大学入試の体裁（公開されている問題冊子をもとにした近似です）</div>
+              <div class="seg" id="ld-theme-subject"></div>
               <div id="ld-themes-univ" class="theme-cards"></div>
               <div class="ld-theme-group-label">自分のテーマ</div>
               <div id="ld-themes-user" class="theme-cards"></div>
@@ -340,6 +368,37 @@
             </section>
 
             <section>
+              <h3>部（I, II）と空欄（物理・化学）</h3>
+              <p class="hint">本文に <code>\Part</code> と書いた所から「I」「II」…の部が始まります（<code>\Part[A]</code> でラベルを指定）。空欄は <code>\blank{ア}</code>。どちらも記号パレットの「文書・環境」から入れられます。</p>
+              <div class="ld-row">
+                <span class="ld-k">部の番号</span>
+                <div class="seg seg-wrap" data-seg="part.style" id="ld-part-styles"></div>
+              </div>
+              <div class="ld-row">
+                <span class="ld-k">書体</span>
+                <div class="seg" data-seg="part.font"><button data-v="gothic">ゴシック</button><button data-v="mincho">明朝</button></div>
+                <label class="ld-check"><input data-l="part.bold" type="checkbox" /> 太字</label>
+              </div>
+              <div class="ld-row">
+                <span class="ld-k">位置</span>
+                <div class="seg" data-seg="part.align"><button data-v="left">左</button><button data-v="center">中央</button></div>
+                <label class="ld-check"><input data-l="part.inline" type="checkbox" /> 番号の後に同じ行で本文を続ける</label>
+              </div>
+              <div class="ld-slider"><span class="ld-k">文字の大きさ</span><input data-l="part.size" type="range" min="0" max="18" step="0.5" /><output></output><span class="unit">pt</span></div>
+              <div class="ld-slider"><span class="ld-k">字下げ</span><input data-l="part.indent" type="range" min="0" max="20" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">部の前の空き</span><input data-l="part.spaceBefore" type="range" min="0" max="20" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">番号の後の空き</span><input data-l="part.spaceAfter" type="range" min="0" max="10" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">同じ行の空き</span><input data-l="part.gap" type="range" min="0" max="10" step="0.25" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-row">
+                <span class="ld-k">空欄の形</span>
+                <div class="seg seg-wrap" data-seg="blank.style" id="ld-blank-styles"></div>
+              </div>
+              <div class="ld-slider"><span class="ld-k">空欄の幅</span><input data-l="blank.width" type="range" min="0" max="40" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-slider"><span class="ld-k">空欄の高さ</span><input data-l="blank.height" type="range" min="0" max="12" step="0.5" /><output></output><span class="unit">mm</span></div>
+              <p class="hint">文字の大きさ・空欄の高さが 0 のときは本文に合わせます。</p>
+            </section>
+
+            <section>
               <h3>用紙</h3>
               <div class="ld-row">
                 <div class="seg" data-seg="paper"><button data-v="a4">A4</button><button data-v="b5">B5</button><button data-v="b4">B4</button><button data-v="a3">A3</button></div>
@@ -389,6 +448,14 @@
           <legend>プリント</legend>
           <label>タイトル<input name="title" type="text" /></label>
           <label>サブタイトル<input name="subtitle" type="text" /></label>
+          <label>科目
+            <select name="subject">
+              <option value="math">数学</option>
+              <option value="physics">物理</option>
+              <option value="chemistry">化学</option>
+            </select>
+          </label>
+          <p class="hint">記号パレットの最初に開く欄、「レイアウト / テーマ」で先に並ぶ大学テーマ、表紙の科目名が科目に合わせて変わります。</p>
           <div class="two">
             <label>作成者<input name="author" type="text" /></label>
             <label>日付<input name="date" type="text" placeholder="例: 2026年11月6日" /></label>

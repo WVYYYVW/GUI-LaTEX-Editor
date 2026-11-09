@@ -115,6 +115,53 @@ test('図は JSON 付きで保存し、読み戻せる', () => {
   assert.match(figureBlock(geo), /\\draw \(P1\) -- \(P2\);/);
 });
 
+import { partShapes, PARTS, figureToSvg } from '../src/renderer/lib/figure.js';
+
+test('物理の部品（ばね・抵抗・電池など）は TikZ と SVG の両方に同じ形で出る', () => {
+  const g = defaultGeo();
+  g.points.push({ id: 'P1', x: 0, y: 0, label: '', dot: false }, { id: 'P2', x: 3, y: 0, label: '', dot: false });
+  for (const p of PARTS) {
+    g.segments = [{ a: 'P1', b: 'P2', kind: p.id, label: '$k$' }];
+    const tikz = figureBlock(g);
+    const svg = figureToSvg(g);
+    const sh = partShapes(p.id, g.points[0], g.points[1], { label: '$k$' });
+    assert.ok(sh.lines.length + sh.fills.length > 0, p.id);
+    assert.match(tikz, /\\node at \([-\d.]+,[-\d.]+\) \{\$k\$\}/, p.id);
+    if (p.id !== 'line') assert.match(svg, /data-seg="0"/, p.id);
+  }
+  // ばねはジグザグ（10 点以上の折れ線）
+  const spring = partShapes('spring', { x: 0, y: 0 }, { x: 3, y: 0 });
+  assert.ok(spring.lines[0].length >= 10);
+});
+
+import { expandScience } from '../src/renderer/lib/chem.js';
+import { findMathRanges as fmr } from '../src/renderer/lib/mathRanges.js';
+
+test('化学式・単位は書き出し時に普通の LaTeX になり、文章中でも数式として扱う', () => {
+  const src = '水 \\ce{H2O} は $\\qty{1.0}{g/cm^3}$，抵抗 \\qty{2.0}{\\kilo\\ohm}，\\unit{m/s}';
+  const out = expandScience(src);
+  assert.doesNotMatch(out, /\\ce\{|\\qty\{|\\unit\{/);
+  assert.match(out, /\\mathrm\{H\}/);
+  assert.match(out, /2\.0\\,\\mathrm\{k\\Omega\}/);
+  const kinds = fmr(src).map((r) => r.kind);
+  assert.deepEqual(kinds, ['cmd', '$', 'cmd', 'cmd']);
+  // \centering や \section などは化学式と間違えない
+  assert.equal(fmr('\\centering \\section{a} \\sim{x}').length, 0);
+});
+
+test('部（\\Part）・空欄（\\blank）・問1 を TeX に出す', () => {
+  const doc = newDocument(true);
+  doc.meta.layout.subLabel = 'toi';
+  doc.meta.layout.part = { ...doc.meta.layout.part, style: 'alphaBracket', inline: true };
+  doc.meta.layout.blank = { ...doc.meta.layout.blank, style: 'bracket' };
+  const tex = buildTex(doc);
+  assert.match(tex, /\\newcommand\{\\lpepartlabel\}\{〔\\Alph\{lpepart\}〕\}/);
+  assert.match(tex, /\\providecommand\{\\Part\}\{\\lpepart\}/);
+  assert.match(tex, /［\\makebox\[\\lpe@bw\]\[c\]/);
+  assert.match(tex, /label=問\\arabic\*|\\renewcommand\{\\labelenumi\}\{問\\arabic\{enumi\}\}/);
+  assert.match(tex, /\\setcounter\{lpepart\}\{0\}/);
+});
+
 import { UNIVERSITY_THEMES } from '../src/renderer/lib/universityThemes.js';
 import { applyTheme, applyPunct } from '../src/renderer/lib/layout.js';
 

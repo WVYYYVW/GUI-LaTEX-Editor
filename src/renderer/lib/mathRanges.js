@@ -7,6 +7,9 @@ export function maskComments(src) {
   return src.replace(/(^|[^\\])(%[^\n]*)/g, (_m, pre, c) => pre + ' '.repeat(c.length));
 }
 
+// { … }（中に { … { … } … } を 2 段まで含んでよい）
+const GROUP = '\\{(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*\\}';
+
 const MATH_RE = new RegExp(
   [
     `\\\\begin\\{((?:${DISPLAY_ENVS})\\*?)\\}([\\s\\S]*?)\\\\end\\{\\1\\}`, // 1,2: 環境
@@ -14,6 +17,8 @@ const MATH_RE = new RegExp(
     '\\\\\\[([\\s\\S]+?)\\\\\\]', // 4: \[ \]
     '\\\\\\(([\\s\\S]+?)\\\\\\)', // 5: \( \)
     '(?<!\\\\)\\$((?:\\\\.|[^$\\\\])+?)\\$', // 6: $ $
+    // 7: 文章中に書ける化学式・単位の命令（\ce{H2O}, \pu{}, \unit{}, \si{}, \num{} と \qty{9.8}{m/s^2}, \SI{}{}）。波括弧は 2 段まで入れ子可
+    `\\\\(?:ce|pu|unit|si|num)\\s*${GROUP}(?![a-zA-Z])|\\\\(?:qty|SI)\\s*${GROUP}\\s*${GROUP}`,
   ].join('|'),
   'g'
 );
@@ -32,6 +37,9 @@ export function findMathRanges(src) {
     const to = from + m[0].length;
     if (m[1] !== undefined) {
       out.push({ from, to, innerFrom: from, innerTo: to, display: true, kind: 'env', env: m[1], latex: src.slice(from, to) });
+    } else if (m[3] === undefined && m[4] === undefined && m[5] === undefined && m[6] === undefined) {
+      // 文章中の \ce{…} / \qty{…}{…} など。命令ごと KaTeX（mhchem）で表示し、句読点の統一などからも守る
+      out.push({ from, to, innerFrom: from, innerTo: to, display: false, kind: 'cmd', latex: src.slice(from, to) });
     } else {
       const g = m[3] ?? m[4] ?? m[5] ?? m[6];
       const kind = m[3] !== undefined ? '$$' : m[4] !== undefined ? '\\[' : m[5] !== undefined ? '\\(' : '$';

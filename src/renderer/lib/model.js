@@ -35,6 +35,7 @@ export function defaultMeta() {
     subtitle: '',
     author: '',
     date: '',
+    subject: 'math', // math | physics | chemistry
     answerMode: 'end', // none | after | end | separate
     columns: 1,
     spaceAfter: 0,

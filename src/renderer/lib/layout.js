@@ -23,6 +23,33 @@ export const SUB_LABELS = [
   { id: 'roman', name: '(i)' },
   { id: 'alpha', name: '(a)' },
   { id: 'kata', name: '(ア)' },
+  { id: 'toi', name: '問1' },
+  { id: 'toiSp', name: '問 1' },
+];
+
+/** 大問の中の「部」（物理・化学の I, II / A, B など）。本文では \Part（ラベルを指定するときは \Part[A]）と書く */
+export const PART_STYLES = [
+  { id: 'roman', name: 'I', tex: '\\Roman{lpepart}', css: 'counter(lpepart, upper-roman)' },
+  { id: 'romanBracket', name: '〔I〕', tex: '〔\\Roman{lpepart}〕', css: "'〔' counter(lpepart, upper-roman) '〕'" },
+  { id: 'romanSquare', name: '[I]', tex: '[\\Roman{lpepart}]', css: "'[' counter(lpepart, upper-roman) ']'" },
+  { id: 'alpha', name: 'A', tex: '\\Alph{lpepart}', css: 'counter(lpepart, upper-alpha)' },
+  { id: 'alphaBracket', name: '〔A〕', tex: '〔\\Alph{lpepart}〕', css: "'〔' counter(lpepart, upper-alpha) '〕'" },
+  { id: 'alphaSquare', name: '[A]', tex: '[\\Alph{lpepart}]', css: "'[' counter(lpepart, upper-alpha) ']'" },
+];
+
+/** 空欄（穴埋め）。本文では \blank{ア} と書く */
+export const BLANK_STYLES = [
+  { id: 'box', name: '枠 ア' },
+  { id: 'bracket', name: '［ ア ］' },
+  { id: 'paren', name: '（ ア ）' },
+  { id: 'underline', name: '下線' },
+];
+
+/** 科目（パレットの並び・テーマの絞り込み・表紙の科目名に使う） */
+export const SUBJECTS = [
+  { id: 'math', name: '数学', cover: '数　学' },
+  { id: 'physics', name: '物理', cover: '物　理' },
+  { id: 'chemistry', name: '化学', cover: '化　学' },
 ];
 
 export const PAPERS = {
@@ -96,6 +123,25 @@ export function defaultLayout() {
       wrap: 'hang', // hang: 2 行目以降を本文にそろえる / left: 左端に戻す
       wrapIndent: 0, // left のとき、2 行目以降の字下げ（mm）
     },
+    // 大問の中の「部」（\Part）
+    part: {
+      style: 'roman', // PART_STYLES の id
+      font: 'gothic', // gothic | mincho
+      bold: true,
+      size: 0, // pt（0 は本文と同じ）
+      align: 'left', // left | center
+      indent: 0, // 本文の左端からの字下げ（mm）
+      inline: false, // true: ラベルの後に同じ行で本文が続く
+      gap: 2, // inline のときのラベルの後の空き（mm）
+      spaceBefore: 4, // 部の前の空き（mm）
+      spaceAfter: 1.5, // 部のラベルの後の空き（mm。inline でないとき）
+    },
+    // 空欄（\blank{ア}）
+    blank: {
+      style: 'box', // BLANK_STYLES の id
+      width: 10, // 最小の幅（mm）
+      height: 0, // 枠の高さ（mm。0 は文字に合わせる）
+    },
     letterSpace: 0, // 字間（全角 1 字に対する割合。例: 0.1）
     parIndent: false, // 段落の行頭を 1 字下げる
     parSkip: 1.5, // 段落と段落の間（mm）
@@ -107,7 +153,7 @@ export function defaultLayout() {
 /** 保存データを既定値で補完する */
 export function normalizeLayout(l = {}) {
   const d = defaultLayout();
-  return { ...d, ...l, head: { ...d.head, ...(l.head || {}) }, sub: { ...d.sub, ...(l.sub || {}) } };
+  return { ...d, ...l, head: { ...d.head, ...(l.head || {}) }, sub: { ...d.sub, ...(l.sub || {}) }, part: { ...d.part, ...(l.part || {}) }, blank: { ...d.blank, ...(l.blank || {}) } };
 }
 
 /** 問題ごとの上書き設定 */
@@ -166,7 +212,15 @@ export const BASE_THEMES = [
 export function applyTheme(meta, theme) {
   const base = defaultLayout();
   const t = theme.layout || {};
-  meta.layout = { ...base, ...t, head: { ...base.head, ...(t.head || {}) }, sub: { ...base.sub, ...(t.sub || {}) }, themeId: theme.id };
+  meta.layout = {
+    ...base,
+    ...t,
+    head: { ...base.head, ...(t.head || {}) },
+    sub: { ...base.sub, ...(t.sub || {}) },
+    part: { ...base.part, ...(t.part || {}) },
+    blank: { ...base.blank, ...(t.blank || {}) },
+    themeId: theme.id,
+  };
   // テーマが触る文書設定は、前のテーマの値が残らないよう既定に戻してから適用する
   Object.assign(meta, { spaceAfter: 0, columns: 1, nameField: false, answerMode: 'end', showDifficulty: true }, theme.meta || {});
 }
@@ -325,6 +379,7 @@ export function texLayoutPreamble(l, docPt = 11) {
     }}`
   );
   L.push('\\makeatother');
+  L.push(...texPartAndBlank(l));
   // ページ番号・ヘッダ
   const foot =
     { plain: '\\hfil\\thepage\\hfil', dash: '\\hfil--- \\thepage\\ ---\\hfil', endash: '\\hfil-- \\thepage\\ --\\hfil', none: '' }[l.pageNumber] ??
@@ -334,6 +389,47 @@ export function texLayoutPreamble(l, docPt = 11) {
   L.push(`\\def\\ps@lpe{\\def\\@oddhead{${headText}}\\let\\@evenhead\\@oddhead\\def\\@oddfoot{${foot}}\\let\\@evenfoot\\@oddfoot}`);
   L.push('\\makeatother');
   L.push('\\pagestyle{lpe}');
+  return L;
+}
+
+/** 「部」（\Part）と空欄（\blank）の定義 */
+export function texPartAndBlank(l) {
+  const L = [];
+  const p = l.part;
+  const st = PART_STYLES.find((x) => x.id === p.style) || PART_STYLES[0];
+  const fam = p.font === 'mincho' ? '\\rmfamily\\mcfamily' : '\\sffamily\\gtfamily';
+  const sz = Number(p.size) > 0 ? `\\fontsize{${Number(p.size)}pt}{${(Number(p.size) * 1.3).toFixed(1)}pt}\\selectfont` : '';
+  L.push('\\newcounter{lpepart}');
+  L.push(`\\newcommand{\\lpepartfont}{${fam}${p.bold ? '\\bfseries' : ''}${sz}}`);
+  L.push(`\\newcommand{\\lpepartlabel}{${st.tex}}`);
+  const label = '{\\lpepartfont\\ifx\\lpe@arg\\@empty\\lpepartlabel\\else\\lpe@arg\\fi}';
+  const ind = Number(p.indent) > 0 ? `\\hspace*{${Number(p.indent)}mm}` : '';
+  let show;
+  if (p.align === 'center') show = `{\\centering${label}\\par}\\nopagebreak\\vspace{${Number(p.spaceAfter)}mm}`;
+  else if (p.inline) show = `\\noindent${ind}${label}\\hspace{${Number(p.gap)}mm}\\ignorespaces`;
+  else show = `\\noindent${ind}${label}\\par\\nopagebreak\\vspace{${Number(p.spaceAfter)}mm}`;
+  L.push('\\makeatletter');
+  L.push(`\\newcommand{\\lpepart}[1][]{\\par\\vspace{${Number(p.spaceBefore)}mm}\\refstepcounter{lpepart}\\def\\lpe@arg{#1}${show}}`);
+  // 空欄: 中身の幅が最小の幅より広ければ広げる
+  const b = l.blank;
+  const w = `${Math.max(0, Number(b.width) || 0)}mm`;
+  const h =
+    Number(b.height) > 0
+      ? `\\rule[-\\dimexpr(${Number(b.height)}mm-0.88\\zw)/2\\relax]{0pt}{${Number(b.height)}mm}`
+      : '\\rule[-0.22\\zw]{0pt}{1.1\\zw}';
+  L.push('\\newlength{\\lpe@bw}');
+  const measure = (extra) => `\\settowidth{\\lpe@bw}{#1}\\addtolength{\\lpe@bw}{${extra}}\\ifdim\\lpe@bw<${w}\\setlength{\\lpe@bw}{${w}}\\fi`;
+  const body =
+    {
+      box: `${measure('0.8\\zw')}{\\setlength{\\fboxsep}{0pt}\\setlength{\\fboxrule}{0.5pt}\\fbox{\\makebox[\\lpe@bw][c]{${h}\\textup{#1}}}}`,
+      bracket: `${measure('0.5\\zw')}［\\makebox[\\lpe@bw][c]{\\textup{#1}}］`,
+      paren: `${measure('0.5\\zw')}（\\makebox[\\lpe@bw][c]{\\textup{#1}}）`,
+      underline: `${measure('1\\zw')}\\underline{\\makebox[\\lpe@bw][c]{${h}\\textup{#1}}}`,
+    }[b.style] || '#1';
+  L.push(`\\newcommand{\\lpeblank}[1]{\\mbox{${body}}}`);
+  L.push('\\makeatother');
+  // 利用者向けの名前（プリアンブルで同じ名前を定義していれば、そちらを優先）
+  L.push('\\AtBeginDocument{\\providecommand{\\Part}{\\lpepart}\\providecommand{\\blank}{\\lpeblank}}');
   return L;
 }
 
@@ -371,6 +467,8 @@ export function texSubLabel(l) {
     roman: ['(\\roman{enumi})', '(\\roman*)'],
     alpha: ['(\\alph{enumi})', '(\\alph*)'],
     kata: ['(\\lpekata{enumi})', '(\\lpekata{enumi})'],
+    toi: ['問\\arabic{enumi}', '問\\arabic*'],
+    toiSp: ['問\\,\\arabic{enumi}', '問\\,\\arabic*'],
   };
   let [classic, enumitem] = map[l.subLabel] || map.paren;
   const full = l.sub?.paren === 'full';
@@ -391,6 +489,7 @@ export function texProblemOpen(l, pl, n, title, stars, isFirst, points) {
   const head = l.head;
   if (!isFirst && (pl.pageBreakBefore || l.newPageEach)) L.push('\\newpage');
   else if (!isFirst && l.rule) L.push('\\par\\medskip\\hrule\\relax');
+  L.push('\\setcounter{lpepart}{0}'); // 部（I, II）の番号は大問ごとに 1 から
   L.push(`\\par\\vspace{${Number(l.spaceBefore)}mm}`);
   const frame = pl.frame ?? l.frame;
   if (frame) L.push('\\begingroup\\setlength{\\fboxsep}{2.5mm}\\noindent\\fbox{\\begin{minipage}{\\dimexpr\\linewidth-2\\fboxsep-2\\fboxrule\\relax}');

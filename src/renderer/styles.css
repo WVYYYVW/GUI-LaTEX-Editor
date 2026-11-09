@@ -440,3 +440,86 @@ input.mid { width: 110px; }
 @media print { #print-root .cover-page { break-after: page; } }
 /* 小問のまとまりの前後にも小問どうしと同じ空き（PDF の topsep と同じ） */
 .page ol { margin-top: var(--sub-gap) !important; margin-bottom: var(--sub-gap) !important; }
+
+/* ---------- 物理・化学：部（\Part）・空欄（\blank）・問1 ---------- */
+.preview, .sh-body { counter-reset: lpepart; }
+.pv-part {
+  display: block; counter-increment: lpepart; text-indent: 0;
+  font-family: var(--part-font, var(--sans)); font-weight: var(--part-weight, 700); font-size: var(--part-size, 1em);
+  margin: var(--part-sb, 4mm) 0 var(--part-sa, 1.5mm) var(--part-indent, 0);
+}
+.pv-par:first-child > .pv-part:first-child { margin-top: 0; }
+.pv-part::before { content: counter(lpepart, upper-roman); }
+.part-romanBracket .pv-part::before { content: '〔' counter(lpepart, upper-roman) '〕'; }
+.part-romanSquare .pv-part::before { content: '[' counter(lpepart, upper-roman) ']'; }
+.part-alpha .pv-part::before { content: counter(lpepart, upper-alpha); }
+.part-alphaBracket .pv-part::before { content: '〔' counter(lpepart, upper-alpha) '〕'; }
+.part-alphaSquare .pv-part::before { content: '[' counter(lpepart, upper-alpha) ']'; }
+.pv-part[data-label]::before, .pv-part[data-label][data-label]::before { content: attr(data-label); }
+.part-center .pv-part { text-align: center; margin-left: 0; }
+.part-inline .pv-part { display: inline; margin: 0 var(--part-gap, 2mm) 0 var(--part-indent, 0); }
+.part-inline .pv-par:has(> .pv-part:first-child) { margin-top: var(--part-sb, 4mm); text-indent: 0; }
+.pv-blank {
+  display: inline-block; box-sizing: border-box; min-width: var(--blank-w, 10mm); padding: 0 0.4em; text-align: center; text-indent: 0;
+  border: 0.6pt solid currentColor; line-height: 1.2; vertical-align: -0.1em; height: var(--blank-h, auto);
+}
+.blank-bracket .pv-blank, .blank-paren .pv-blank { border: none; padding: 0; }
+.blank-bracket .pv-blank::before { content: '［'; } .blank-bracket .pv-blank::after { content: '］'; }
+.blank-paren .pv-blank::before { content: '（'; } .blank-paren .pv-blank::after { content: '）'; }
+.blank-underline .pv-blank { border: none; border-bottom: 0.6pt solid currentColor; }
+.sub-toi ol.en-decimal, .sub-toiSp ol.en-decimal { list-style: none; counter-reset: en; padding-left: 2.4em; }
+.sub-toi ol.en-decimal > li, .sub-toiSp ol.en-decimal > li { counter-increment: en; position: relative; }
+.sub-toi ol.en-decimal > li::before { content: '問' counter(en); position: absolute; }
+.sub-toiSp ol.en-decimal > li::before { content: '問 ' counter(en); position: absolute; }
+
+/* ---------- 選択枠・フォーカス枠が見切れないように ----------
+   スクロールする欄（overflow: auto）や角丸のグループ（overflow: hidden）の中では、外側に描く outline が切れる。
+   選択中の表示とキーボードのフォーカス枠は、要素の内側に描く。 */
+.seg-wrap button.on, .theme-card.on { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.seg button:focus-visible, .seg-wrap button:focus-visible, .theme-card:focus-visible,
+.ld-controls button:focus-visible, .ld-controls input:focus-visible, .ld-controls select:focus-visible,
+.fig-controls button:focus-visible, .fig-controls input:focus-visible, .fig-controls select:focus-visible,
+.palette-grid button:focus-visible, .palette-tabs button:focus-visible { outline-offset: -2px; }
+.ld-controls, .fig-controls { padding-left: 3px; padding-top: 2px; }
+.fig-parts { margin-top: 6px; }
+.fig-parts button { padding: 5px 4px; font-size: 12px; }
+
+/* ---------- AI に渡すプロンプト ---------- */
+.pd-head { display: flex; align-items: center; gap: 8px; }
+.pd-head h2 { margin: 0; }
+.pd-prompt { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px 10px; margin: 8px 0; background: var(--panel-2); }
+.pd-prompt .ld-row { margin: 6px 0; }
+.pd-req { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); margin: 6px 0; }
+.pd-req textarea { font-size: 13px; resize: vertical; }
+.pd-p-text { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; resize: vertical; }
+.pd-pv-head { font-family: var(--sans); font-weight: 700; margin: 10px 0 4px; padding-bottom: 2px; border-bottom: 1px solid #d8d6cf; }
+.pd-pv-head:first-child { margin-top: 0; }
+.pd-pv-head.sol { color: #2f6fdf; }
+.paste-modal { max-height: 94vh; overflow-y: auto; }
+/* <code> の既定の等幅フォントが日本語フォントだと \ が ¥ で表示されるので、欧文の等幅フォントを先に使う */
+code { font-family: var(--mono); font-size: 0.95em; }
+#ld-part-styles, #ld-blank-styles { flex: 1; }
+/* 貼り付けダイアログは縦に並べ、プロンプトの欄を開いても「取り込む」ボタンが画面内に残るようにする */
+.paste-modal { display: flex; flex-direction: column; max-height: 94vh; overflow: hidden; }
+.paste-modal > .pd-grid { flex: 1 1 auto; height: auto; min-height: 200px; }
+.paste-modal > .pd-prompt, .paste-modal > .hint, .paste-modal > .md-row, .paste-modal > .actions, .paste-modal > .pd-head { flex: none; }
+.paste-modal .pd-prompt { max-height: 42vh; overflow-y: auto; }
+.pd-col { min-height: 0; }
+.pd-preview { overflow-y: auto; }
+.badge:empty { display: none; }
+.paste-modal { height: min(94vh, 980px); }
+/* 作図の点・部品の行は 1 行に収める（削除の × が次の行に落ちないように） */
+.fig-pt { flex-wrap: nowrap; }
+.fig-pt input.num { width: 52px; }
+.fig-pt input.mid { width: 0; flex: 1 1 70px; min-width: 56px; }
+.fig-pt select { max-width: 76px; }
+.fig-pt label { white-space: nowrap; }
+.fig-pt > button.ghost { margin-left: auto; flex: none; }
+.fig-seg-name { white-space: nowrap; font-size: 12px; flex: none; }
+/* 窓が狭いときはツールバーを折り返す（右端のボタンが画面の外に出ないように） */
+.toolbar { flex-wrap: wrap; row-gap: 6px; }
+.tb-group { flex-wrap: wrap; row-gap: 6px; }
+/* 窓が低いときも「取り込む」まで届くように（プロンプトの欄は低めに、足りなければダイアログごとスクロール） */
+.paste-modal { overflow-y: auto; }
+.paste-modal > .pd-grid { min-height: 140px; }
+.paste-modal .pd-prompt { max-height: 34vh; }

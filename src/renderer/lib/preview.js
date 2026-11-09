@@ -1,5 +1,6 @@
 // LaTeX（問題文）→ HTML プレビュー。数式は KaTeX、文章部分はよく使う命令だけを簡易変換する。
 import katex from 'katex';
+import { SCIENCE_MACROS, normalizeNumbers } from './chem.js'; // \ce{…}（化学式, mhchem）・単位のマクロ
 import { findMathRanges, maskComments } from './mathRanges.js';
 import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins } from './layout.js';
 import { findFigures, figureToSvg } from './figure.js';
@@ -7,10 +8,12 @@ import { coverNotes } from './texExport.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+export { SCIENCE_MACROS };
+
 /** プリアンブルの \newcommand / \DeclareMathOperator を KaTeX のマクロに変換 */
 export function collectMacros(preamble = '') {
   // アプリの書式ボタンが使う色の命令（PDF 側はプリアンブルで \textcolor[HTML] として定義）
-  const macros = { '\\lpecolor': '\\textcolor{###1}{#2}' };
+  const macros = { '\\lpecolor': '\\textcolor{###1}{#2}', ...SCIENCE_MACROS };
   const src = maskComments(preamble);
   const readGroup = (s, i) => {
     while (s[i] === ' ' || s[i] === '\n') i++;
@@ -37,7 +40,7 @@ export function collectMacros(preamble = '') {
 }
 
 export function renderMath(latex, display, macros = {}) {
-  return katex.renderToString(latex, {
+  return katex.renderToString(normalizeNumbers(latex), {
     displayMode: display,
     throwOnError: false,
     strict: 'ignore',
@@ -74,8 +77,15 @@ function textToHtml(s) {
   // 図・TikZ は PDF でのみ表示
   s = s.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '\u0003TIKZ\u0003');
   s = s.replace(/\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g, (_m, f) => `\u0003IMG:${f}\u0003`);
+  // 大問の中の「部」（\Part, \Part[A]）は新しい段落にする。番号の形はプリント全体の CSS（part-…）で決まる
+  s = s.replace(/\\Part(?![a-zA-Z])\s*(?:\[([^\]]*)\])?/g, (_m, lab) => `\n\n\u0006P${lab == null ? '' : encodeURIComponent(lab)}\u0006`);
+  // 空欄 \blank{ア}
+  for (let k = 0; k < 3; k++) s = s.replace(/\\blank\s*\{([^{}]*)\}/g, (_m, t) => `\u0006B${t}\u0007`);
 
   s = esc(s);
+  s = s
+    .replace(/\u0006P([^\u0006]*)\u0006/g, (_m, lab) => `<span class="pv-part"${lab ? ` data-label="${esc(decodeURIComponent(lab))}"` : ''}></span>`)
+    .replace(/\u0006B([^\u0007]*)\u0007/g, '<span class="pv-blank">$1</span>');
   // エスケープ文字
   s = s
     .replace(/\\\{/g, '&#123;')
@@ -218,7 +228,8 @@ export function renderLatex(src, macros = {}, opts = {}) {
   for (const r of ranges) {
     joined += masked.slice(last, r.from) + `\u0001${maths.length}\u0002`;
     let h = renderMath(r.latex, r.display, macros);
-    if (opts.field) {
+    // 化学式・単位（\ce など）は数式エディタでは編集できないので、ダブルクリックの対象にしない
+    if (opts.field && r.kind !== 'cmd') {
       h = `<span class="pv-math${r.display ? ' pv-display' : ''}" data-field="${opts.field}" data-from="${r.from}" title="ダブルクリックで数式エディタ / 右クリックで Word 用にコピー">${h}</span>`;
     }
     maths.push(h);
@@ -243,6 +254,28 @@ export function setImageResolver(fn) {
 
 export function renderInline(src, macros) {
   return `<span class="inline-latex">${renderLatex(src, macros)}</span>`;
+}
+
+/**
+ * 問題文の中身の見た目（小問番号・部・空欄）をレイアウトに合わせるためのクラスと CSS 変数。
+ * プリント全体だけでなく、「この問題」のプレビューや貼り付けダイアログのプレビューにも使う。
+ */
+export function contentStyle(layout) {
+  const l = normalizeLayout(layout);
+  const pa = l.part;
+  const bl = l.blank;
+  const classes = [
+    `sub-${l.subLabel}`,
+    l.sub.paren === 'full' ? 'sub-full' : '',
+    `part-${pa.style}`,
+    pa.align === 'center' ? 'part-center' : pa.inline ? 'part-inline' : '',
+    `blank-${bl.style}`,
+  ].filter(Boolean);
+  const vars =
+    `--part-font:${pa.font === 'mincho' ? 'var(--serif)' : 'var(--sans)'};--part-weight:${pa.bold ? 700 : 400};--part-size:${Number(pa.size) > 0 ? `${Number(pa.size)}pt` : '1em'}` +
+    `;--part-indent:${Number(pa.indent) || 0}mm;--part-gap:${Number(pa.gap) || 0}mm;--part-sb:${Number(pa.spaceBefore) || 0}mm;--part-sa:${Number(pa.spaceAfter) || 0}mm` +
+    `;--blank-w:${Number(bl.width) || 0}mm${Number(bl.height) > 0 ? `;--blank-h:${Number(bl.height)}mm` : ''}`;
+  return { classes, vars };
 }
 
 const stars = (n) => (n > 0 ? `<span class="sh-stars">難易度 ${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>` : '');
@@ -270,14 +303,15 @@ export function renderSheet(doc, macros, opts = {}) {
   const s = l.sub;
   const cls = [
     'sheet page',
-    `sub-${l.subLabel}`,
-    s.paren === 'full' ? 'sub-full' : '',
     s.wrap === 'left' ? 'sub-wrapleft' : '',
     l.parIndent ? 'parindent' : '',
     l.displayAlign === 'left' ? 'fleqn' : '',
     m.columns === 2 ? 'cols-2' : '',
+    ...contentStyle(l).classes,
   ].filter(Boolean).join(' ');
-  const vars = `--sub-indent:${Number(s.indent)}mm;--sub-sep:${Number(s.sep)}mm;--sub-gap:${Number(s.gap)}mm;--sub-wrap:${Number(s.wrapIndent) || 0}mm;--math-indent:${Number(l.mathIndent)}mm;--par-skip:${Number(l.parSkip)}mm`;
+  const vars =
+    `--sub-indent:${Number(s.indent)}mm;--sub-sep:${Number(s.sep)}mm;--sub-gap:${Number(s.gap)}mm;--sub-wrap:${Number(s.wrapIndent) || 0}mm;--math-indent:${Number(l.mathIndent)}mm;--par-skip:${Number(l.parSkip)}mm;` +
+    contentStyle(l).vars;
   // 上下左右の余白（個別指定があればそれを使う。PDF と同じ考え方）
   const pm = pageMargins(l);
   const padL = pm.left ?? padX;

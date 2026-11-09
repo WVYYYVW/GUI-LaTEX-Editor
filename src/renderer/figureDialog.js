@@ -1,5 +1,5 @@
 // 「図・グラフ」ダイアログ：関数グラフ / 図形（作図）/ 画像
-import { defaultGraph, defaultGeo, defaultImage, figureToSvg, figureErrors, geoBounds } from './lib/figure.js';
+import { defaultGraph, defaultGeo, defaultImage, figureToSvg, figureErrors, geoBounds, PARTS } from './lib/figure.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -24,6 +24,7 @@ export function initFigureDialog(deps) {
   let spec = null;
   let onDone = null;
   let geoTool = 'point';
+  let geoPart = 'line'; // 「線・部品」で引く部品の種類
   let pending = null; // 線分・円の 1 点目
 
   // ---------------- 描画 ----------------
@@ -57,7 +58,7 @@ export function initFigureDialog(deps) {
       graph: 'グラフ上をクリックすると点を追加、点はドラッグで動かせます（0.5 刻み。Shift で刻みなし）。',
       geo: {
         point: 'クリックした所に点を置きます（0.5 刻み。Shift で刻みなし）。',
-        segment: '2 点を順にクリックすると線分を引きます（既存の点の近くをクリックするとその点を使います）。',
+        segment: '2 点を順にクリックすると、選んだ部品（線分・ばね・抵抗・矢印など）を置きます。既存の点の近くをクリックするとその点につなぎます。床・壁の斜線や部品の名前の位置は「反対側」で入れ替えられます。',
         circle: '中心 → 円周上の 1 点の順にクリックすると円を描きます。',
         move: '点をドラッグして動かします。線分・円も一緒に動きます。',
         delete: '点・線分・円をクリックすると削除します。',
@@ -128,11 +129,22 @@ export function initFigureDialog(deps) {
 
   function rowsGeo() {
     const g = spec;
-    const name = (id) => g.points.find((p) => p.id === id)?.label || id;
-    const tools = [['point', '点'], ['segment', '線分'], ['circle', '円'], ['move', '移動'], ['delete', '削除']];
+    // 点の名前。名前の無い点（部品の端など）は座標で表す
+    const name = (id) => {
+      const p = g.points.find((q) => q.id === id);
+      return p?.label || (p ? `(${p.x}, ${p.y})` : id);
+    };
+    const ends = (s) => {
+      const a = name(s.a);
+      const b = name(s.b);
+      return a.startsWith('(') || b.startsWith('(') ? `${a}–${b}` : `${a}${b}`;
+    };
+    const tools = [['point', '点'], ['segment', '線・部品'], ['circle', '円'], ['move', '移動'], ['delete', '削除']];
+    const partName = (k) => PARTS.find((p) => p.id === (k || 'line'))?.name || '線分';
     return `
       <section><h3>道具</h3>
         <div class="seg">${tools.map(([k, n]) => `<button data-tool="${k}" class="${geoTool === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+        ${geoTool === 'segment' ? `<div class="seg seg-wrap fig-parts">${PARTS.map((p) => `<button data-part="${p.id}" class="${geoPart === p.id ? 'on' : ''}">${p.name}</button>`).join('')}</div>` : ''}
         <div class="ld-slider"><span class="ld-k">大きさ</span><input type="range" data-g="scale" min="0.3" max="2" step="0.05" value="${g.scale}"><output>${Number(g.scale).toFixed(2)}</output><span class="unit">cm</span></div>
         <label class="ld-check"><input type="checkbox" data-g="grid"${g.grid ? ' checked' : ''}> 方眼も出力する</label>
       </section>
@@ -150,7 +162,15 @@ export function initFigureDialog(deps) {
           .join('') || '<p class="hint">右の方眼をクリックして点を置いてください。</p>'}
       </section>
       <section><h3>線分・円</h3>
-        ${g.segments.map((s, i) => `<div class="fig-pt">線分 ${esc(name(s.a))}${esc(name(s.b))} <label><input type="checkbox" data-seg="${i}" data-k="dashed"${s.dashed ? ' checked' : ''}> 破線</label><button data-del-seg="${i}" class="ghost">×</button></div>`).join('')}
+        ${g.segments
+          .map(
+            (s, i) => `<div class="fig-pt"><span class="fig-seg-name">${esc(partName(s.kind))} ${esc(ends(s))}</span>
+              <input data-seg="${i}" data-k="label" value="${esc(s.label)}" placeholder="名前（例 $k$）" title="部品の名前。例: $k$, $R$, $F$" class="mid">
+              <label><input type="checkbox" data-seg="${i}" data-k="flip"${s.flip ? ' checked' : ''}> 反対側</label>
+              <label><input type="checkbox" data-seg="${i}" data-k="dashed"${s.dashed ? ' checked' : ''}> 破線</label>
+              <button data-del-seg="${i}" class="ghost" title="削除">×</button></div>`
+          )
+          .join('')}
         ${g.circles.map((c, i) => `<div class="fig-pt">円（中心 ${esc(name(c.c))}） <label><input type="checkbox" data-circ="${i}" data-k="dashed"${c.dashed ? ' checked' : ''}> 破線</label><button data-del-circ="${i}" class="ghost">×</button></div>`).join('') || (g.segments.length ? '' : '<p class="hint">まだありません。</p>')}
       </section>`;
   }
@@ -222,6 +242,9 @@ export function initFigureDialog(deps) {
     else if (d.delCirc !== undefined) spec.circles.splice(Number(d.delCirc), 1);
     else if (d.tool) {
       geoTool = d.tool;
+      pending = null;
+    } else if (d.part) {
+      geoPart = d.part;
       pending = null;
     } else if (d.align) spec.align = d.align;
     else if ('chooseImage' in d) {
@@ -312,10 +335,11 @@ export function initFigureDialog(deps) {
         if (!nearPoint(m)) spec.points.push({ id: nextId(), x: m.x, y: m.y, label: nextLabel(), pos: 'auto', dot: true });
         render();
       } else if (geoTool === 'segment' || geoTool === 'circle') {
-        const p = pointAt(m, { noLabel: geoTool === 'circle' && !!pending });
+        // 部品（ばね・抵抗など）の端は名前・黒丸なしの点にする（つなぎ目は「点を打つ」で黒丸にできる）
+        const p = pointAt(m, { noLabel: (geoTool === 'circle' && !!pending) || (geoTool === 'segment' && geoPart !== 'line') });
         if (!pending) pending = p.id;
         else if (pending !== p.id) {
-          if (geoTool === 'segment') spec.segments.push({ a: pending, b: p.id, dashed: false });
+          if (geoTool === 'segment') spec.segments.push({ a: pending, b: p.id, dashed: false, ...(geoPart !== 'line' ? { kind: geoPart } : {}) });
           else spec.circles.push({ c: pending, p: p.id, dashed: false });
           pending = null;
         }
@@ -323,7 +347,7 @@ export function initFigureDialog(deps) {
       } else if (geoTool === 'delete') {
         const p = nearPoint(m);
         if (p) removePoint(spec.points.indexOf(p));
-        else if (e.target.dataset.seg !== undefined) spec.segments.splice(Number(e.target.dataset.seg), 1);
+        else if (e.target.closest('[data-seg]')) spec.segments.splice(Number(e.target.closest('[data-seg]').dataset.seg), 1);
         else if (e.target.dataset.circle !== undefined) spec.circles = spec.circles.filter((c) => c.c !== e.target.dataset.circle);
         render();
       }
@@ -353,8 +377,8 @@ export function initFigureDialog(deps) {
   });
 
   // ---------------- 開閉 ----------------
-  function open(initial, done) {
-    spec = structuredClone(initial || defaultGraph());
+  function open(initial, done, opts = {}) {
+    spec = structuredClone(initial || (opts.newType === 'geo' ? defaultGeo() : defaultGraph()));
     onDone = done;
     pending = null;
     geoTool = 'point';
