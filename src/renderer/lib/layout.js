@@ -14,6 +14,8 @@ export const HEAD_STYLES = [
   { id: 'dot', name: '1.' },
   { id: 'bracketSp', name: '〔 1 〕' },
   { id: 'roman', name: 'I, II' },
+  { id: 'plainRoman', name: '問題 I' },
+  { id: 'daiRoman', name: '第 I 問' },
 ];
 
 export const SUB_LABELS = [
@@ -25,6 +27,11 @@ export const SUB_LABELS = [
   { id: 'kata', name: '(ア)' },
   { id: 'toi', name: '問1' },
   { id: 'toiSp', name: '問 1' },
+  { id: 'toiDot', name: '問 1.' },
+  { id: 'toiPparen', name: '問⑴' },
+  { id: 'setsumon', name: '設問(1)：' },
+  { id: 'aparen', name: '⒜' },
+  { id: 'kataPlain', name: 'ア' },
 ];
 
 /** 大問の中の「部」（物理・化学の I, II / A, B など）。本文では \Part（ラベルを指定するときは \Part[A]）と書く */
@@ -35,6 +42,7 @@ export const PART_STYLES = [
   { id: 'alpha', name: 'A', tex: '\\Alph{lpepart}', css: 'counter(lpepart, upper-alpha)' },
   { id: 'alphaBracket', name: '〔A〕', tex: '〔\\Alph{lpepart}〕', css: "'〔' counter(lpepart, upper-alpha) '〕'" },
   { id: 'alphaSquare', name: '[A]', tex: '[\\Alph{lpepart}]', css: "'[' counter(lpepart, upper-alpha) ']'" },
+  { id: 'pparen', name: '⑴', tex: '\\lpepparen{lpepart}', css: 'counter(lpepart, lpe-pparen)' },
 ];
 
 /** 空欄（穴埋め）。本文では \blank{ア} と書く */
@@ -43,6 +51,7 @@ export const BLANK_STYLES = [
   { id: 'bracket', name: '［ ア ］' },
   { id: 'paren', name: '（ ア ）' },
   { id: 'underline', name: '下線' },
+  { id: 'kikko', name: '〔 ア 〕' },
 ];
 
 /** 科目（パレットの並び・テーマの絞り込み・表紙の科目名に使う） */
@@ -106,6 +115,7 @@ export function defaultLayout() {
     pointsFormat: '({n}点)',
     afterEach: 'none', // 大問の後のページ: none | blank（白紙）| draft（下書き用紙）
     draftText: '(下書き用紙)',
+    draftPages: 1, // 大問の後の下書き用紙の枚数
     endText: '', // 問題の最後に入れる一文（例: 問題は，このページで終わりである。）
     spaceBefore: 8,
     spaceAfterHead: 2,
@@ -253,6 +263,10 @@ export function headNumberHtml(h, n) {
       return `[${n}]`;
     case 'dai':
       return `第${n}問`;
+    case 'plainRoman':
+      return `${escH(h.label || '')}${ROMAN[n] || n}`;
+    case 'daiRoman':
+      return `第&thinsp;${ROMAN[n] || n}&thinsp;問`;
     case 'roman':
       return ROMAN[n] || String(n);
     default:
@@ -313,6 +327,7 @@ export function texLayoutPreamble(l, docPt = 11) {
   // 本文の全角 1 字の幅（大きな番号の枠を本文の行の中央にそろえるのに使う）
   L.push('\\newlength{\\lpebodyzw}\\AtBeginDocument{\\setlength{\\lpebodyzw}{1\\zw}}');
   L.push('\\newcommand{\\lpepparen}[1]{\\ifcase\\value{#1}\\or ⑴\\or ⑵\\or ⑶\\or ⑷\\or ⑸\\or ⑹\\or ⑺\\or ⑻\\or ⑼\\or ⑽\\fi}');
+  L.push('\\newcommand{\\lpeaparen}[1]{\\ifcase\\value{#1}\\or ⒜\\or ⒝\\or ⒞\\or ⒟\\or ⒠\\or ⒡\\or ⒢\\or ⒣\\or ⒤\\or ⒥\\fi}');
   L.push(`\\definecolor{lpehead}{HTML}{${hex(head.color)}}`);
   const fam = head.font === 'mincho' ? '\\rmfamily\\mcfamily' : '\\sffamily\\gtfamily';
   const sz = Number(head.size) || 13;
@@ -340,12 +355,15 @@ export function texLayoutPreamble(l, docPt = 11) {
     square: '[#1]',
     dai: '第#1問',
     roman: '\\Roman{lpetmp}',
+    // 見出しの文字（例: 「物理問題　」）の後にローマ数字。文字と数字の間の空きは見出しの文字に含める
+    plainRoman: `${head.label || ''}\\Roman{lpetmp}`,
+    daiRoman: '第\\hspace{0.25\\zw}\\Roman{lpetmp}\\hspace{0.25\\zw}問',
   }[head.style] || '#1';
   L.push('\\newcounter{lpetmp}\\newlength{\\lpehangw}');
   L.push(`\\newcommand{\\lpenum}[1]{\\setcounter{lpetmp}{#1}${num}}`);
   // 本文の字下げ
   L.push(
-    `\\newenvironment{lpebody}{\\begin{list}{}{\\setlength{\\leftmargin}{${Number(l.bodyIndent)}mm}\\setlength{\\rightmargin}{0pt}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\itemsep}{0pt}\\setlength{\\parsep}{\\parskip}}\\item\\relax}{\\end{list}}`
+    `\\newenvironment{lpebody}{\\begin{list}{}{\\setlength{\\leftmargin}{${Number(l.bodyIndent)}mm}\\setlength{\\rightmargin}{0pt}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\itemsep}{0pt}\\setlength{\\parsep}{\\parskip}\\setlength{\\listparindent}{\\parindent}}\\item\\relax}{\\end{list}}`
   );
   // 段落の字下げ・別行立ての式
   L.push(`\\setlength{\\parindent}{${l.parIndent ? '1\\zw' : '0pt'}}\\setlength{\\parskip}{${Number(l.parSkip)}mm}`);
@@ -425,6 +443,7 @@ export function texPartAndBlank(l) {
       bracket: `${measure('0.5\\zw')}［\\makebox[\\lpe@bw][c]{\\textup{#1}}］`,
       paren: `${measure('0.5\\zw')}（\\makebox[\\lpe@bw][c]{\\textup{#1}}）`,
       underline: `${measure('1\\zw')}\\underline{\\makebox[\\lpe@bw][c]{${h}\\textup{#1}}}`,
+      kikko: `${measure('0.5\\zw')}〔\\makebox[\\lpe@bw][c]{\\textup{#1}}〕`,
     }[b.style] || '#1';
   L.push(`\\newcommand{\\lpeblank}[1]{\\mbox{${body}}}`);
   L.push('\\makeatother');
@@ -469,6 +488,11 @@ export function texSubLabel(l) {
     kata: ['(\\lpekata{enumi})', '(\\lpekata{enumi})'],
     toi: ['問\\arabic{enumi}', '問\\arabic*'],
     toiSp: ['問\\,\\arabic{enumi}', '問\\,\\arabic*'],
+    toiDot: ['問\\,\\arabic{enumi}.', '問\\,\\arabic*.'],
+    toiPparen: ['問\\lpepparen{enumi}', '問\\lpepparen{enumi}'],
+    setsumon: ['設問(\\arabic{enumi})：', '設問(\\arabic*)：'],
+    aparen: ['\\lpeaparen{enumi}', '\\lpeaparen{enumi}'],
+    kataPlain: ['\\lpekata{enumi}', '\\lpekata{enumi}'],
   };
   let [classic, enumitem] = map[l.subLabel] || map.paren;
   const full = l.sub?.paren === 'full';
@@ -515,7 +539,7 @@ export function texProblemOpen(l, pl, n, title, stars, isFirst, points) {
     );
     L.push(
       // 番号は左寄せ（字下げ幅を広げても番号は左端のまま、本文だけが右に寄る）
-      `\\begin{list}{}{\\setlength{\\leftmargin}{\\lpehangw}\\setlength{\\labelwidth}{\\dimexpr\\lpehangw-${gapMm}mm\\relax}\\setlength{\\labelsep}{${gapMm}mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{\\parskip}\\def\\makelabel#1{#1\\hfil}}`
+      `\\begin{list}{}{\\setlength{\\leftmargin}{\\lpehangw}\\setlength{\\labelwidth}{\\dimexpr\\lpehangw-${gapMm}mm\\relax}\\setlength{\\labelsep}{${gapMm}mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{\\parskip}\\setlength{\\listparindent}{\\parindent}\\def\\makelabel#1{#1\\hfil}}`
     );
     const headLine = t || st || ptsAfter ? `${t ? `{\\lpeheadfont ${title}}` : ''}${ptsAfter}${st}\\par\\vspace{${Number(l.spaceAfterHead)}mm}` : '';
     L.push(`\\item[{\\lpeheadfont\\lpenum{${n}}}]${headLine}`);

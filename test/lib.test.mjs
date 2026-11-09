@@ -163,6 +163,35 @@ test('部（\\Part）・空欄（\\blank）・問1 を TeX に出す', () => {
 });
 
 import { UNIVERSITY_THEMES } from '../src/renderer/lib/universityThemes.js';
+
+test('物理・化学の大学テーマ: 科目ごとにあり、番号の形・下書き用紙の枚数・和文の大きさを TeX に出す', () => {
+  const by = (s) => UNIVERSITY_THEMES.filter((t) => (t.meta?.subject || 'math') === s);
+  assert.ok(by('physics').length >= 9 && by('chemistry').length >= 9);
+  assert.equal(new Set(UNIVERSITY_THEMES.map((t) => t.id)).size, UNIVERSITY_THEMES.length);
+  const make = (id) => {
+    const doc = newDocument(true);
+    applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === id));
+    return { doc, tex: buildTex(doc) };
+  };
+  // 京都: 「物理問題　I」
+  assert.match(make('univ-kyoto-phys').tex, /\\newcommand\{\\lpenum\}\[1\]\{\\setcounter\{lpetmp\}\{#1\}物理問題　\\Roman\{lpetmp\}\}/);
+  // 名古屋: 設問(1)：
+  assert.match(make('univ-nagoya-phys').tex, /設問\(\\arabic\*\)：|設問\(\\arabic\{enumi\}\)：/);
+  // 東京科学: 第 I 問・下書き用紙 2 ページ
+  const isct = make('univ-isct-chem');
+  assert.match(isct.tex, /第\\hspace\{0\.25\\zw\}\\Roman\{lpetmp\}/);
+  assert.equal(isct.tex.split('（下　書　き　用　紙）').length - 1, 2 * isct.doc.problems.length);
+  assert.equal(isct.doc.meta.subject, 'chemistry');
+  // 九州（化学）: 〔 ア 〕の空欄、⑴ の部
+  const ky = make('univ-kyushu-chem').tex;
+  assert.match(ky, /〔\\makebox\[\\lpe@bw\]/);
+  assert.match(ky, /\\newcommand\{\\lpepartlabel\}\{\\lpepparen\{lpepart\}\}/);
+  // 和文を欧文と同じ大きさで組む（ltjsarticle の 0.924715 倍にしない）
+  assert.match(ky, /\\def\\Cjascale\{1\}/);
+  assert.match(ky, /\\DeclareFontShape\{JY3\}\{mc\}\{m\}\{n\}\{<-> s\*\[1\]/);
+  // 見出しの下の本文でも段落の 1 字下げが効く
+  assert.match(ky, /\\setlength\{\\listparindent\}\{\\parindent\}/);
+});
 import { applyTheme, applyPunct } from '../src/renderer/lib/layout.js';
 
 test('大学テーマはすべて TeX を生成できる', () => {
@@ -180,7 +209,7 @@ test('上下左右の余白・番号の張り出し・枠の大きさを TeX に
   const doc = newDocument(true);
   applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-tohoku'));
   const tex = buildTex(doc);
-  assert.match(tex, /left=27\.6mm,right=23\.8mm,top=27\.4mm,bottom=22mm/);
+  assert.match(tex, /left=27\.6mm,right=23\.8mm,top=27\.6mm,bottom=22mm/);
   assert.match(tex, /\\hspace\*\{-3\.7mm\}\{\\lpeheadfont\\lpenum\{1\}\}/);
   assert.match(tex, /\\vbox to \\dimexpr5\.6mm-2\\fboxrule/);
   // 2 段目のリスト（字下げ用のリストの中の小問）にも小問の字下げを設定する

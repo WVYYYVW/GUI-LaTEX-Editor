@@ -166,7 +166,7 @@ export function initLayoutPanel(deps) {
       sample.innerHTML = headNumberHtml({ ...l.head, style: b.dataset.v }, 1);
       sample.style.cssText = `font-family:${l.head.font === 'mincho' ? 'var(--serif)' : 'var(--sans)'};font-weight:${l.head.bold ? 700 : 400};color:${l.head.color};font-size:15px`;
     });
-    $('#ld-label-row').classList.toggle('hidden', l.head.style !== 'plain');
+    $('#ld-label-row').classList.toggle('hidden', l.head.style !== 'plain' && l.head.style !== 'plainRoman');
     renderThemes();
   }
 

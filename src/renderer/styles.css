@@ -523,3 +523,23 @@ code { font-family: var(--mono); font-size: 0.95em; }
 .paste-modal { overflow-y: auto; }
 .paste-modal > .pd-grid { min-height: 140px; }
 .paste-modal .pd-prompt { max-height: 34vh; }
+.ld-row label.ld-inline { flex-direction: row; align-items: center; gap: 5px; }
+.ld-row label.ld-inline input { width: 56px; }
+/* 物理・化学の大学テーマで使う番号の形 */
+@counter-style lpe-aparen { system: fixed; symbols: '⒜' '⒝' '⒞' '⒟' '⒠' '⒡' '⒢' '⒣' '⒤' '⒥'; suffix: ''; }
+.sub-toiDot ol.en-decimal, .sub-toiPparen ol.en-decimal, .sub-setsumon ol.en-decimal, .sub-aparen ol.en-decimal, .sub-kataPlain ol.en-decimal { list-style: none; counter-reset: en; padding-left: 2.4em; }
+.sub-toiDot ol.en-decimal > li, .sub-toiPparen ol.en-decimal > li, .sub-setsumon ol.en-decimal > li, .sub-aparen ol.en-decimal > li, .sub-kataPlain ol.en-decimal > li { counter-increment: en; position: relative; }
+.sub-toiDot ol.en-decimal > li::before { content: '問 ' counter(en) '.'; position: absolute; }
+.sub-toiPparen ol.en-decimal > li::before { content: '問' counter(en, lpe-pparen); position: absolute; }
+.sub-setsumon ol.en-decimal > li::before { content: '設問(' counter(en) ')：'; position: absolute; }
+.sub-aparen ol.en-decimal > li::before { content: counter(en, lpe-aparen); position: absolute; }
+.sub-kataPlain ol.en-decimal > li::before { content: counter(en, katakana); position: absolute; }
+.part-pparen .pv-part::before { content: counter(lpepart, lpe-pparen); }
+.blank-kikko .pv-blank { border: none; padding: 0; }
+.blank-kikko .pv-blank::before { content: '〔 '; } .blank-kikko .pv-blank::after { content: ' 〕'; }
+/* 小問番号の選択肢は数が多いので 4 列で折り返す */
+.seg-wrap.seg-4 { grid-template-columns: repeat(4, 1fr); flex: 1; }
+.seg-wrap.seg-4 button { padding: 6px 4px; }
+/* 「改ページ」の目印が次の大問の 1 行目に重ならないように（本文の行送りを受け継がず、下に空きを取る） */
+.sh-pagebreak { line-height: 1; margin: 8mm 0 5mm; }
+.sh-pagebreak span { top: -0.55em; line-height: 1; display: inline-block; }

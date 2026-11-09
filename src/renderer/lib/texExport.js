@@ -11,6 +11,25 @@ const ensureNl = (s) => (s.endsWith('\n') ? s : s + '\n');
 // 化学式・単位は書き出し時に普通の LaTeX に置き換える（expandScience）。mhchem・siunitx が無い TeX でも組める
 export const TEX_SCIENCE = CHEM_PREAMBLE;
 
+// 和文を欧文と同じ大きさで組む。ltjsarticle は和文を欧文の 0.924715 倍（\Cjascale）にするため、
+// 10pt の本文の和文が 9.25pt になり、プレビューや実物の冊子より 1 行の字数が多くなっていた。
+// 読み込み済みの和文フォント（クラスの読み込み時に使われた大きさ）を捨ててから選び直す。
+const JA_SIZES = ['5', '6', '7', '8', '9', '10', '10.95', '11', '12', '14.4', '17.28', '20.74', '24.88'];
+export const TEX_JA_SCALE = [
+  '\\def\\Cjascale{1}',
+  // フォントの形の宣言は宣言のときに倍率を取り込むので、luatexja の既定（lltjdefs.sty）と同じ形で宣言し直す
+  '\\makeatletter',
+  '\\DeclareFontShape{JY3}{mc}{m}{n}{<-> s*[1] \\ltj@stdmcfont:-kern;jfm=\\ltj@stdyokojfm}{}',
+  '\\DeclareFontShape{JY3}{gt}{m}{n}{<-> s*[1] \\ltj@stdgtfont:-kern;jfm=\\ltj@stdyokojfm}{}',
+  '\\DeclareFontShape{JT3}{mc}{m}{n}{<-> s*[1] \\ltj@stdmcfont:-kern;jfm=\\ltj@stdtatejfm}{}',
+  '\\DeclareFontShape{JT3}{gt}{m}{n}{<-> s*[1] \\ltj@stdgtfont:-kern;jfm=\\ltj@stdtatejfm}{}',
+  // 今の大きさ（11pt のクラスでは 10.95001 のような値）で読み込み済みのものも捨てる
+  ['JY3/mc/m/n', 'JY3/gt/m/n', 'JT3/mc/m/n', 'JT3/gt/m/n'].map((f) => `\\expandafter\\let\\csname ${f}/\\f@size\\endcsname\\relax`).join(''),
+  '\\makeatother',
+  JA_SIZES.flatMap((sz) => ['JY3/mc/m/n', 'JY3/gt/m/n', 'JT3/mc/m/n', 'JT3/gt/m/n'].map((f) => `\\expandafter\\let\\csname ${f}/${sz}\\endcsname\\relax`)).join(''),
+  '\\selectfont',
+];
+
 export function buildTex(doc) {
   const m = doc.meta;
   const lay = normalizeLayout(m.layout);
@@ -24,6 +43,7 @@ export function buildTex(doc) {
   L.push('\\IfFileExists{tikz.sty}{\\usepackage{tikz}\\usetikzlibrary{arrows.meta,calc,intersections}}{}');
   // 化学式（\ce{H2O}）と単位（\qty{9.8}{m/s^2}, \unit{N}）。パッケージが無い環境でも同じ書き方で組めるようにする
   L.push(...TEX_SCIENCE);
+  L.push(...TEX_JA_SCALE);
   // 小問番号。enumitem が無い TeX 環境でも [label=(\arabic*)] / (\alph*) / (\roman*) が使えるようにする
   const sub = texSubLabel(lay);
   L.push('\\newcommand{\\lpekata}[1]{\\ifcase\\value{#1}\\or ア\\or イ\\or ウ\\or エ\\or オ\\or カ\\or キ\\or ク\\or ケ\\or コ\\or サ\\or シ\\fi}');
@@ -93,7 +113,10 @@ export function buildTex(doc) {
     L.push(...close);
     // 大問の後の白紙・下書き用紙
     if (lay.afterEach === 'blank') L.push('\\newpage\\null\\thispagestyle{empty}');
-    else if (lay.afterEach === 'draft') L.push(`\\newpage\\begin{center}${lay.draftText || '(下書き用紙)'}\\end{center}`);
+    else if (lay.afterEach === 'draft') {
+      const pages = Math.max(1, Math.min(6, Math.round(Number(lay.draftPages) || 1)));
+      for (let k = 0; k < pages; k++) L.push(`\\newpage\\begin{center}${lay.draftText || '(下書き用紙)'}\\end{center}`);
+    }
   });
   if (lay.endText) L.push(`\\par\\vspace{8mm}{\\centering\\sffamily\\gtfamily ${lay.endText}\\par}`);
   if (twoCol) L.push('\\end{multicols}');

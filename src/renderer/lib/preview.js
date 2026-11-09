@@ -372,7 +372,10 @@ export function renderSheet(doc, macros, opts = {}) {
     }
     out += '</section>';
     if (l.afterEach === 'blank') out += '<div class="sh-pagebreak"><span>改ページ（白紙のページ）</span></div>';
-    else if (l.afterEach === 'draft') out += `<div class="sh-pagebreak"><span>改ページ（${esc(l.draftText || '下書き用紙')}）</span></div>`;
+    else if (l.afterEach === 'draft') {
+      const pages = Math.max(1, Math.min(6, Math.round(Number(l.draftPages) || 1)));
+      out += `<div class="sh-pagebreak"><span>改ページ（${esc(l.draftText || '下書き用紙')}${pages > 1 ? ` × ${pages} ページ` : ''}）</span></div>`;
+    }
   });
   out += '</div>';
   if (l.endText) out += `<div class="sh-endtext">${esc(l.endText)}</div>`;
