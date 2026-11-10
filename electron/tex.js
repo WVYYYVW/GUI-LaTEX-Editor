@@ -70,6 +70,105 @@ function parseErrors(log) {
 }
 
 /**
+ * ログから「TeX に入っていないパッケージのファイル」を拾う（\documentclass・\usepackage の読み込み失敗）。
+ * .sty / .cls だけを見る（\input した自分のファイルが無いのはパッケージを入れても直らない）
+ */
+function missingFiles(log) {
+  const found = [];
+  const re = /(?:LaTeX Error: File `|! I can't find file `)([^'\s]+\.(?:sty|cls))'/g;
+  let m;
+  while ((m = re.exec(log || ''))) if (!found.includes(m[1])) found.push(m[1]);
+  return found;
+}
+
+// アプリが出力する文書が使うファイル → TeX Live のパッケージ名
+const FILE_PACKAGES = {
+  'ltjsarticle.cls': 'luatexja',
+  'luatexja.sty': 'luatexja',
+  'luatexja-fontspec.sty': 'luatexja',
+  'amsmath.sty': 'amsmath',
+  'amssymb.sty': 'amsfonts',
+  'amsthm.sty': 'amscls',
+  'mathtools.sty': 'mathtools',
+  'bm.sty': 'tools',
+  'multicol.sty': 'tools',
+  'enumitem.sty': 'enumitem',
+  'geometry.sty': 'geometry',
+  'graphicx.sty': 'graphics',
+  'xcolor.sty': 'xcolor',
+  'tikz.sty': 'pgf',
+  'pgf.sty': 'pgf',
+};
+// 上のファイルをまとめて入れるコレクション（BasicTeX などの小さい TeX に足りないもの）
+const TL_COLLECTIONS = ['collection-langjapanese', 'collection-latexrecommended', 'collection-pictures'];
+
+function packageOf(file) {
+  if (FILE_PACKAGES[file]) return FILE_PACKAGES[file];
+  if (/^ltj/.test(file) || /^luatexja/.test(file)) return 'luatexja';
+  if (/^(tikz|pgf)/.test(file)) return 'pgf';
+  return file.replace(/\.(sty|cls|tex|def|cfg)$/, '');
+}
+
+const quote = (p) => (/\s/.test(p) ? `"${p}"` : p);
+
+/**
+ * 足りないファイルを入れる方法（使っている TeX の種類と OS に合わせる）
+ * @param {string[]} files missingFiles の結果
+ * @param {{platform?:string, enginePath?:string, exists?:(p:string)=>boolean}} env
+ * @returns {null | {files:string[], packages:string[], japanese:boolean, distro:string, message:string, steps:{text:string, command?:string}[], note:string}}
+ */
+function missingAdvice(files, { platform = process.platform, enginePath = '', exists = fs.existsSync } = {}) {
+  if (!files || !files.length) return null;
+  const win = platform === 'win32';
+  const packages = [...new Set(files.map(packageOf))];
+  const japanese = packages.includes('luatexja');
+  const known = new Set(Object.values(FILE_PACKAGES));
+  const extra = packages.filter((p) => !known.has(p));
+  const P = win ? path.win32 : path.posix;
+  const dir = enginePath ? P.dirname(enginePath) : '';
+  const lower = enginePath.toLowerCase();
+  let distro = 'texlive';
+  if (lower.includes('miktex')) distro = 'miktex';
+  else if (platform === 'linux' && enginePath.startsWith('/usr/bin/')) distro = 'linux';
+
+  const message =
+    `TeX に${files.map((f) => `「${f}」`).join('')}がありません。` +
+    (japanese
+      ? '日本語を組むための luatexja が入っていない TeX です（Mac の BasicTeX など）。'
+      : '使っている TeX に、このパッケージが入っていません。') +
+    '次の手順で入れてから、もう一度「PDF を作成」してください。';
+
+  const steps = [];
+  let note = '';
+  if (distro === 'miktex') {
+    steps.push({ text: 'MiKTeX Console を開き、Settings → General の「missing packages」の項目を「Always」にする（足りないものを自動で入れるようになる）。コマンドで設定するなら:', command: 'initexmf --set-config-value=[MPM]AutoInstall=1' });
+    steps.push({ text: 'または、足りないパッケージを直接入れる:', command: `miktex packages install ${[...new Set([...packages, ...(japanese ? ['haranoaji'] : [])])].join(' ')}` });
+    note = 'MiKTeX を「全ユーザー用」に入れた場合は、MiKTeX Console を管理者モードで開いてください。';
+  } else if (distro === 'linux') {
+    steps.push({ text: 'Debian / Ubuntu の場合:', command: 'sudo apt install texlive-luatex texlive-lang-japanese texlive-latex-recommended texlive-latex-extra texlive-pictures' });
+    note = 'ほかのディストリビューションでは、日本語（luatexja）・latex-recommended・pgf を含むパッケージを入れてください。';
+  } else {
+    let tlmgr = 'tlmgr';
+    for (const name of win ? ['tlmgr.bat', 'tlmgr.exe'] : ['tlmgr']) {
+      const p = dir ? P.join(dir, name) : '';
+      if (p && exists(p)) {
+        tlmgr = quote(win ? p.replace(/\.bat$/i, '') : p);
+        break;
+      }
+    }
+    const sudo = win ? '' : 'sudo ';
+    const where = win ? 'コマンドプロンプトで' : 'ターミナルで';
+    steps.push({ text: `${where}次の 2 行を順に実行する（${win ? '' : 'Mac のログインパスワードを聞かれます。'}数分かかります）。まず tlmgr 自身を新しくする:`, command: `${sudo}${tlmgr} update --self` });
+    steps.push({ text: '必要なパッケージをまとめて入れる:', command: `${sudo}${tlmgr} install ${[...TL_COLLECTIONS, ...extra].join(' ')}` });
+    note =
+      '「older than remote repository」と出るときは TeX が古いので、' +
+      (platform === 'darwin' ? '最新の MacTeX を入れ直してください（容量に余裕があれば BasicTeX より MacTeX がおすすめです）。' : '最新の TeX Live を入れ直してください。') +
+      (win ? 'TeX Live を全ユーザー用に入れた場合は、コマンドプロンプトを「管理者として実行」で開いてください。' : '');
+  }
+  return { files, packages, japanese, distro, message, steps, note };
+}
+
+/**
  * @param {{source:string, enginePath:string, projectDir?:string}} opts
  * @returns {Promise<{ok:boolean, pdfPath?:string, workDir:string, log:string, errors:any[]}>}
  */
@@ -108,4 +207,4 @@ function compile({ source, enginePath, projectDir }) {
   });
 }
 
-module.exports = { detectEngine, compile, parseErrors };
+module.exports = { detectEngine, compile, parseErrors, missingFiles, missingAdvice };

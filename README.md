@@ -79,6 +79,7 @@ Word の数式機能の「日本語で使いにくい」「AI が書いた式を
 
 - Node.js 20 以上（開発時）
 - PDF 作成には LuaLaTeX（Windows: [TeX Live](https://www.tug.org/texlive/)、macOS: [MacTeX](https://www.tug.org/mactex/)）。場所は自動で探す（設定で指定も可）。`enumitem` が入っていない環境でも動くようにしてある
+  - 日本語には **luatexja** が必要。Mac の BasicTeX など小さい TeX には入っていないので、`sudo tlmgr update --self` のあと `sudo tlmgr install collection-langjapanese collection-latexrecommended collection-pictures` で入れる（PDF 作成で足りないものがあると、アプリが入れ方とコマンドを表示する）
 
 ## 開発
 

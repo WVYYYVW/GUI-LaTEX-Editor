@@ -948,12 +948,57 @@ async function compilePdf() {
     if (!res.canceled) toast(`PDF を作成しました: ${res.savedPath}`, 'info', 4000);
     return;
   }
-  showErrors(source, res.errors || []);
+  showErrors(source, res.errors || [], res.missing);
 }
 
-function showErrors(source, errors) {
+/** TeX に足りないファイルがあるときの説明（コマンドはコピーできる） */
+function missingItem(missing) {
+  const li = document.createElement('li');
+  li.className = 'ep-missing';
+  const msg = document.createElement('p');
+  msg.textContent = missing.message;
+  li.append(msg);
+  const ol = document.createElement('ol');
+  for (const step of missing.steps) {
+    const item = document.createElement('li');
+    item.append(step.text);
+    if (step.command) {
+      const row = document.createElement('div');
+      row.className = 'ep-cmd';
+      const code = document.createElement('code');
+      code.textContent = step.command;
+      const copy = document.createElement('button');
+      copy.className = 'ghost';
+      copy.textContent = 'コピー';
+      copy.addEventListener('click', async () => {
+        await api.writeClipboard({ text: step.command });
+        toast('コマンドをコピーしました', 'info', 2000);
+      });
+      row.append(code, copy);
+      item.append(row);
+    }
+    ol.append(item);
+  }
+  li.append(ol);
+  if (missing.note) {
+    const note = document.createElement('p');
+    note.className = 'ep-note';
+    note.textContent = missing.note;
+    li.append(note);
+  }
+  return li;
+}
+
+function showErrors(source, errors, missing) {
   const ul = $('#error-list');
   ul.innerHTML = '';
+  $('#error-panel').classList.toggle('tall', !!missing);
+  if (missing) {
+    ul.append(missingItem(missing));
+    $('#error-panel').classList.remove('hidden');
+    toast('TeX に必要なパッケージが入っていません。下の説明に従って入れてください', 'error', 7000);
+    return;
+  }
   if (!errors.length) errors = [{ line: null, message: 'PDF を作成できませんでした（詳細不明）' }];
   for (const e of errors) {
     const li = document.createElement('li');

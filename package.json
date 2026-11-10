@@ -1,7 +1,7 @@
 {
   "name": "latex-problem-editor",
   "productName": "LaTeX Problem Editor",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "数学の問題を LaTeX で作成・管理する日本語向けデスクトップアプリ（Windows / macOS）",
   "main": "electron/main.js",
   "private": true,

@@ -259,7 +259,10 @@ function registerIpc() {
       projectDir: projectPath ? path.dirname(projectPath) : undefined,
     });
     try {
-      if (!res.ok) return { ok: false, errors: res.errors, log: res.log.slice(-6000) };
+      if (!res.ok) {
+        const missing = tex.missingAdvice(tex.missingFiles(res.log), { enginePath: engine });
+        return { ok: false, errors: res.errors, missing, log: res.log.slice(-6000) };
+      }
       let out = defaultOutPath(projectPath, title, 'pdf');
       if (!projectPath) {
         const r = await dialog.showSaveDialog(mainWindow, {
