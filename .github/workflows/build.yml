@@ -1,6 +1,11 @@
 # Windows / macOS のインストーラーを作り、タグの Release に添付するワークフロー。
 # 使い方: v で始まるタグ（例: v0.2.0）を push すると実行される。
 #        Actions タブから手動実行した場合は、Release ではなく成果物（Artifacts）として保存される。
+#
+# コード署名（docs/signing.md）: リポジトリの Secrets に次を登録すると自動で署名する。無ければ署名なしで作る。
+#   macOS  : CSC_LINK, CSC_KEY_PASSWORD（Developer ID Application 証明書）
+#            APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID（公証）
+#   Windows: ES_USERNAME, ES_PASSWORD, ES_TOTP_SECRET, ES_CREDENTIAL_ID（SSL.com eSigner）
 name: build
 
 on:
@@ -18,6 +23,10 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      MAC_SIGN: ${{ secrets.CSC_LINK != '' && secrets.CSC_KEY_PASSWORD != '' }}
+      MAC_NOTARIZE: ${{ secrets.CSC_LINK != '' && secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+      WIN_SIGN: ${{ secrets.ES_USERNAME != '' && secrets.ES_PASSWORD != '' && secrets.ES_TOTP_SECRET != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,10 +44,101 @@ jobs:
       - name: テスト
         run: npm test
 
-      - name: インストーラーの作成
+      # ---------------- macOS ----------------
+      - name: インストーラーの作成（macOS・署名あり）
+        if: runner.os == 'macOS' && env.MAC_SIGN == 'true'
         run: npm run dist -- --publish never
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false # コード署名なし
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: インストーラーの作成（macOS・アドホック署名）
+        if: runner.os == 'macOS' && env.MAC_SIGN != 'true'
+        run: npm run dist -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # ---------------- Windows ----------------
+      - name: インストーラーの作成（Windows・署名なし）
+        if: runner.os == 'Windows' && env.WIN_SIGN != 'true'
+        run: npm run dist -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # 署名あり: アプリ本体（exe）を作って署名 → それを使ってインストーラーを作って署名
+      - name: アプリ本体の作成（Windows）
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        run: npx vite build && npx electron-builder --config electron-builder.config.cjs --win --dir --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # CodeSignTool はパスの空白を扱えないことがあるので、空白の無い場所に写して署名し、元に戻す
+      - name: アプリ本体を署名用の場所へ
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\sign" | Out-Null
+          Copy-Item "release\win-unpacked\LaTeX Problem Editor.exe" "$env:RUNNER_TEMP\sign\app.exe"
+
+      - name: アプリ本体の署名（SSL.com eSigner）
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        uses: SSLcom/esigner-codesign@cf5f6c1d38ad10f47e3ed9aca873f429b1a8d85b # v1.3.2
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ runner.temp }}\sign\app.exe
+          override: true
+          environment_name: PROD
+
+      - name: インストーラーの作成（Windows・署名済みの本体から）
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item "$env:RUNNER_TEMP\sign\app.exe" "release\win-unpacked\LaTeX Problem Editor.exe" -Force
+          npx electron-builder --config electron-builder.config.cjs --win --prepackaged release/win-unpacked --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = Get-ChildItem release -Filter "*Setup*.exe" | Where-Object Name -notlike '*uninstaller*' | Select-Object -First 1
+          if (-not $setup) { throw 'インストーラーが見つかりません' }
+          Copy-Item $setup.FullName "$env:RUNNER_TEMP\sign\setup.exe" -Force
+          "SETUP_NAME=$($setup.Name)" >> $env:GITHUB_ENV
+
+      - name: インストーラーの署名（SSL.com eSigner）
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        uses: SSLcom/esigner-codesign@cf5f6c1d38ad10f47e3ed9aca873f429b1a8d85b # v1.3.2
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ runner.temp }}\sign\setup.exe
+          override: true
+          environment_name: PROD
+
+      - name: 署名の確認（Windows）
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item "$env:RUNNER_TEMP\sign\setup.exe" "release\$env:SETUP_NAME" -Force
+          foreach ($f in @("release\win-unpacked\LaTeX Problem Editor.exe", "release\$env:SETUP_NAME")) {
+            $s = Get-AuthenticodeSignature $f
+            "$f : $($s.Status) $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { throw "署名されていません: $f" }
+          }
+
+      - name: 署名の確認（macOS）
+        if: runner.os == 'macOS' && env.MAC_SIGN == 'true'
+        run: |
+          for app in release/mac*/*.app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            if [ "$MAC_NOTARIZE" = "true" ]; then spctl --assess --type execute --verbose "$app"; fi
+          done
 
       - name: 成果物として保存
         uses: actions/upload-artifact@v4
