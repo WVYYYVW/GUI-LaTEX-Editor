@@ -107,9 +107,9 @@ npm run dist:mac
 
 ビルド済みのインストーラーは [Releases](https://github.com/WVYYYVW/GUI-LaTEX-Editor/releases) からダウンロードできます。
 
-macOS 版は Mac 上でビルドする必要があります。`v` で始まるタグ（例: `v0.2.0`）を push すると、GitHub Actions（`.github/workflows/build.yml`）が Windows / macOS 両方のインストーラーを作り、そのタグの Release に添付します（コード署名はしていないため、初回起動時に OS の警告が出ます）。
+macOS 版は Mac 上でビルドする必要があります。`v` で始まるタグ（例: `v0.2.0`）を push すると、GitHub Actions（`.github/workflows/build.yml`）が Windows / macOS 両方のインストーラーを作り、そのタグの Release に添付します。リポジトリの Secrets に証明書を登録すると Windows（SSL.com eSigner）・macOS（Developer ID と公証）の署名も自動で行います（手順は [docs/signing.md](docs/signing.md)。未登録なら署名なしで、初回起動時に OS の警告が出ます）。
 
-macOS 版は Apple シリコン（`mac-arm64`）と Intel（`mac-x64`）の 2 種類を作ります。Apple の証明書がないためアドホック署名のみです。初回はアプリを右クリック →「開く」、または「システム設定」→「プライバシーとセキュリティ」→「このまま開く」で起動します。「壊れているため開けません」と出る場合は次を実行してください。
+macOS 版は Apple シリコン（`mac-arm64`）と Intel（`mac-x64`）の 2 種類を作ります。Apple の証明書を登録していない間はアドホック署名のみです。初回はアプリを右クリック →「開く」、または「システム設定」→「プライバシーとセキュリティ」→「このまま開く」で起動します。「壊れているため開けません」と出る場合は次を実行してください。
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/LaTeX Problem Editor.app"

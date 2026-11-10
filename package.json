@@ -12,59 +12,9 @@
     "build": "vite build",
     "start": "vite build && node scripts/run-electron.mjs",
     "test": "node --test \"test/*.test.mjs\"",
-    "dist": "vite build && electron-builder",
-    "dist:win": "vite build && electron-builder --win",
-    "dist:mac": "vite build && electron-builder --mac"
-  },
-  "build": {
-    "appId": "io.github.wvyyyvw.latexproblemeditor",
-    "productName": "LaTeX Problem Editor",
-    "files": [
-      "electron/**/*",
-      "dist/renderer/**/*",
-      "package.json"
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "fileAssociations": [
-      {
-        "ext": "mathprob",
-        "name": "Math Problem Set",
-        "role": "Editor"
-      }
-    ],
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ],
-      "identity": "-",
-      "hardenedRuntime": false,
-      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
-      "category": "public.app-category.education"
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
+    "dist": "vite build && electron-builder --config electron-builder.config.cjs",
+    "dist:win": "vite build && electron-builder --config electron-builder.config.cjs --win",
+    "dist:mac": "vite build && electron-builder --config electron-builder.config.cjs --mac"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
