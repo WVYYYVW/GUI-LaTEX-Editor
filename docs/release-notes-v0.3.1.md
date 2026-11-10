@@ -10,7 +10,7 @@ PDF 作成で TeX にパッケージが足りないときに、何が足りな�
 macOS で初めて開くときは、アプリを右クリック →「開く」（開けないときは「システム設定」→「プライバシーとセキュリティ」→「このまま開く」）。「壊れているため開けません」と出るときは、ターミナルで `xattr -dr com.apple.quarantine "/Applications/LaTeX Problem Editor.app"` を実行してください。
 
 ### 変更点
-- 「File `ltjsarticle.cls' not found」のように TeX にパッケージが入っていないと、エラーの欄に「TeX に「ltjsarticle.cls」がありません。日本語を組むための luatexja が入っていない TeX です」と出し、入れ方を表示する
+- ``File `ltjsarticle.cls' not found`` のように TeX にパッケージが入っていないと、エラーの欄に「TeX に「ltjsarticle.cls」がありません。日本語を組むための luatexja が入っていない TeX です」と出し、入れ方を表示する
   - TeX Live（Mac の BasicTeX を含む）：`tlmgr update --self` と、日本語・作図などアプリに必要なものをまとめて入れる `tlmgr install collection-langjapanese collection-latexrecommended collection-pictures`（Mac では `sudo` 付き）
   - MiKTeX：足りないパッケージを自動で入れる設定の仕方
   - Linux：`apt` のコマンド
