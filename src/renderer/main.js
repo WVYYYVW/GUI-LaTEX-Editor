@@ -1129,6 +1129,7 @@ function showErrors(source, errors, missing) {
       loc = locateLine(source, e.line);
       if (loc.where === 'problem') where = `問題 ${loc.index + 1}（${loc.field === 'body' ? '問題文' : '解答'}）${loc.line} 行目: `;
       else if (loc.where === 'preamble') where = `プリアンブル ${loc.line} 行目: `;
+      else if (loc.where === 'layout') where = `レイアウトの「LaTeX で調整」${loc.line} 行目: `;
     }
     li.textContent = where + e.message;
     if (e.context) {
@@ -1146,6 +1147,8 @@ function showErrors(source, errors, missing) {
       });
     } else if (loc && loc.where === 'preamble') {
       li.addEventListener('click', openSettings);
+    } else if (loc && loc.where === 'layout') {
+      li.addEventListener('click', () => layoutPanel.open('latex'));
     }
     ul.append(li);
   }

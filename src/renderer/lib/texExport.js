@@ -60,6 +60,13 @@ export function buildTex(doc) {
   );
   L.push('\\makeatother');
   L.push(...texLayoutPreamble(lay, parseInt(fs, 10)));
+  // レイアウトの画面で書き足した LaTeX（生成したレイアウトの命令を上書きできるよう、その後に置く）
+  if (String(lay.customTex || '').trim()) {
+    L.push(`${MARK} layouttex`);
+    L.push('\\makeatletter');
+    L.push(ensureNl(lay.customTex).replace(/\n$/, ''));
+    L.push('\\makeatother');
+  }
   L.push('\\newcommand{\\lpecolor}[2]{\\textcolor[HTML]{#1}{#2}}');
   L.push('\\newcounter{lpecovn}');
   L.push(`${MARK} preamble`);
@@ -201,6 +208,7 @@ export function locateLine(source, lineNo) {
     const parts = l.slice(MARK.length).trim().split(/\s+/);
     if (parts[0] === 'fixed') return { where: 'template' };
     if (parts[0] === 'preamble') return { where: 'preamble', line: lineNo - (i + 1) };
+    if (parts[0] === 'layouttex') return { where: 'layout', line: lineNo - (i + 2) }; // \makeatletter の 1 行分
     if (parts[0] === 'problem') return { where: 'problem', index: Number(parts[1]) - 1, field: parts[2], line: lineNo - (i + 1) };
   }
   return { where: 'template' };

@@ -458,7 +458,7 @@ export function renderSheetParts(doc, macros, opts = {}) {
   }
   // 表紙は別のページとして先頭に置く
   const cover = m.cover?.enabled
-    ? coverPage(m.cover, ps.length, `width:${w}mm;min-height:${paperH}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt`, punct)
+    ? coverPage(m.cover, opts.totalProblems ?? ps.length, `width:${w}mm;min-height:${paperH}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt`, punct)
     : '';
   return { head: cover + head, items, mid, answers, tail: tail + '</div>' };
 }

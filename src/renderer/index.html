@@ -295,6 +295,9 @@
               <div class="ld-row" id="ld-label-row">
                 <label>見出しの文字<input data-l="head.label" type="text" /></label>
               </div>
+              <div class="ld-row hidden" id="ld-custom-row">
+                <label>見出しの LaTeX（{n} が番号、{I} がローマ数字）<input data-l="head.customTex" type="text" spellcheck="false" placeholder="例: \fbox{第{n}問}　\textbf{Problem {n}}" /></label>
+              </div>
               <div class="ld-row">
                 <span class="ld-k">書体</span>
                 <div class="seg" data-seg="head.font"><button data-v="gothic">ゴシック</button><button data-v="mincho">明朝</button></div>
@@ -443,6 +446,20 @@
                 <span class="ld-k">ページ番号</span>
                 <div class="seg" data-seg="pageNumber"><button data-v="plain">1</button><button data-v="dash">— 1 —</button><button data-v="endash">– 1 –</button><button data-v="none">なし</button></div>
               </div>
+            </section>
+
+            <section id="ld-latex-section">
+              <h3>LaTeX で調整（上級者向け）</h3>
+              <p class="hint">ここに書いた LaTeX は、上の設定から作ったレイアウトの命令の後に入ります（\renewcommand などで上書きできます）。PDF にだけ効き、プレビューには出ません。</p>
+              <textarea data-l="customTex" rows="6" spellcheck="false" class="ld-tex" placeholder="例:
+\renewcommand{\lpeheadfont}{\sffamily\bfseries\large}  % 大問番号の書体
+\setlength{\parskip}{2mm}  % 段落の間"></textarea>
+              <details class="ld-gen">
+                <summary>上の設定から作られる LaTeX を見る</summary>
+                <p class="hint">大問番号は \lpenum{番号}、書体は \lpeheadfont で決まります。コピーして書き換え、上の欄に貼れば細かく調整できます。</p>
+                <pre id="ld-gen-tex" class="ld-tex"></pre>
+                <button type="button" id="ld-gen-copy">コピー</button>
+              </details>
             </section>
           </div>
           <div class="ld-preview preview" id="ld-preview"></div>

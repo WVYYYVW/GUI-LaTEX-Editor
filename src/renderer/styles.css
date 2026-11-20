@@ -169,7 +169,7 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--panel-2); bor
 /* プレビュー */
 .preview-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel-2); }
 .pv-hint { font-size: 11.5px; color: var(--muted); padding-bottom: 4px; }
-.preview { flex: 1; overflow: auto; padding: 18px; }
+.preview { flex: 1; overflow: auto; padding: 18px; scrollbar-gutter: stable; } /* 縦のスクロールバーが出ても用紙の幅の計算が変わらないように */
 .paper {
   background: var(--paper); color: #1d1d1b; border-radius: 4px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   padding: 28px 32px; max-width: 760px; margin: 0 auto; font-family: var(--serif); font-size: 15.5px; line-height: 1.85;
@@ -424,6 +424,13 @@ input.mid { width: 110px; }
 .field-tabs { flex-wrap: wrap; row-gap: 4px; }
 .field-tabs .write-bar, .field-tabs .fmt-bar, .field-tabs #toggle-palette { margin-bottom: 4px; }
 .write-bar { display: flex; align-items: center; gap: 3px; margin-right: 8px; }
+/* レイアウトの「LaTeX で調整」 */
+.ld-tex { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+textarea.ld-tex { resize: vertical; min-height: 7em; }
+pre.ld-tex { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin: 6px 0; }
+.ld-gen summary { cursor: pointer; color: var(--accent); margin: 6px 0; }
+.hn-custom-box { border: 1px solid currentColor; padding: 0 0.25em; }
+.ld-preview-note { text-align: center; }
 .write-bar button { padding: 2px 8px; font-size: 13px; white-space: nowrap; }
 .write-bar button[data-write="sub"] { color: var(--accent); border-color: var(--accent); }
 .fmt-bar { display: flex; align-items: center; gap: 3px; margin-right: 8px; }

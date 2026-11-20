@@ -1,11 +1,12 @@
 // 「レイアウト / テーマ」ダイアログと、プレビュー上での直接操作（解答スペースのドラッグ）
-import { HEAD_STYLES, SUB_LABELS, PART_STYLES, BLANK_STYLES, SUBJECTS, BASE_THEMES, applyTheme, headNumberHtml, normalizeLayout } from './lib/layout.js';
+import { HEAD_STYLES, SUB_LABELS, PART_STYLES, BLANK_STYLES, SUBJECTS, BASE_THEMES, applyTheme, headNumberHtml, normalizeLayout, texLayoutPreamble } from './lib/layout.js';
 import { UNIVERSITY_THEMES, UNVERIFIED_UNIVERSITIES } from './lib/universityThemes.js';
 import { renderSheet } from './lib/preview.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const PX_PER_MM = 96 / 25.4;
+const PREVIEW_PROBLEMS = 4; // レイアウトの画面のプレビューに使う問題の数
 
 const getPath = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
 function setPath(obj, path, v) {
@@ -174,8 +175,25 @@ export function initLayoutPanel(deps) {
       sample.style.cssText = `font-family:${l.head.font === 'mincho' ? 'var(--serif)' : 'var(--sans)'};font-weight:${l.head.bold ? 700 : 400};color:${l.head.color};font-size:15px`;
     });
     $('#ld-label-row').classList.toggle('hidden', l.head.style !== 'plain' && l.head.style !== 'plainRoman');
+    $('#ld-custom-row').classList.toggle('hidden', l.head.style !== 'custom');
+    if ($('.ld-gen').open) showGeneratedTex();
     renderThemes();
   }
+
+  // ---------------- LaTeX で調整 ----------------
+  function showGeneratedTex() {
+    const l = lay();
+    $('#ld-gen-tex').textContent = texLayoutPreamble(l, parseInt(doc().meta.fontSize, 10) || 11).join('\n');
+  }
+  $('.ld-gen').addEventListener('toggle', () => $('.ld-gen').open && showGeneratedTex());
+  $('#ld-gen-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('#ld-gen-tex').textContent);
+      deps.toast('レイアウトの LaTeX をコピーしました');
+    } catch {
+      deps.toast('コピーできませんでした', 'error');
+    }
+  });
 
   // ---------------- テーマ ----------------
   function themeCard(t, { deletable } = {}) {
@@ -264,7 +282,11 @@ export function initLayoutPanel(deps) {
   function renderPreview() {
     if (dlg.classList.contains('hidden')) return;
     const scroll = preview.scrollTop;
-    preview.innerHTML = renderSheet(doc(), deps.getMacros(), { interactive: true });
+    // 問題が多いと全部を描くのに数秒かかるので、レイアウトの確認には先頭の数題だけを使う
+    const d = doc();
+    const sample = d.problems.length > PREVIEW_PROBLEMS ? { ...d, problems: d.problems.slice(0, PREVIEW_PROBLEMS) } : d;
+    preview.innerHTML = renderSheet(sample, deps.getMacros(), { interactive: true, totalProblems: d.problems.length });
+    if (sample !== d) preview.insertAdjacentHTML('beforeend', `<p class="hint ld-preview-note">（確認用に先頭の ${PREVIEW_PROBLEMS} 題だけを表示しています。全部で ${d.problems.length} 題）</p>`);
     fitPages(preview);
     preview.scrollTop = scroll;
   }
@@ -280,6 +302,7 @@ export function initLayoutPanel(deps) {
     sync();
     renderPreview();
     if (focus === 'head') headHost.scrollIntoView({ block: 'center' });
+    else if (focus === 'latex') $('#ld-latex-section').scrollIntoView({ block: 'start' });
   }
   function close() {
     dlg.classList.add('hidden');

@@ -16,6 +16,7 @@ export const HEAD_STYLES = [
   { id: 'roman', name: 'I, II' },
   { id: 'plainRoman', name: '問題 I' },
   { id: 'daiRoman', name: '第 I 問' },
+  { id: 'custom', name: '自作（LaTeX）' },
 ];
 
 export const SUB_LABELS = [
@@ -105,7 +106,9 @@ export function defaultLayout() {
       align: 'left', // 本文の上に置くときの位置: left | center
       outdent: 0, // 番号を本文の左端より外（余白側）に出す量（mm）。「直後に本文」のとき
       boxSize: 0, // 枠囲みの番号の枠の大きさ（mm、正方形）。0 は文字に合わせる
+      customTex: '\\fbox{第{n}問}', // 「自作（LaTeX）」の見出し。{n} が番号、{I} がローマ数字
     },
+    customTex: '', // レイアウトの LaTeX に付け足す命令（上級者向け。生成したレイアウトの後に入る）
     titleBlock: true, // プリントの表題（タイトル・氏名欄）を出す
     bodyPt: 0, // 本文の文字サイズ（pt。0 は「設定」の文字サイズ）
     lineHeight: 0, // 行送り（文字サイズの何倍か。0 は既定）
@@ -181,6 +184,32 @@ export const BASE_THEMES = [
     layout: {},
   },
   {
+    id: 'minimal',
+    name: 'シンプル',
+    desc: '「1.」の番号だけ・飾りなし',
+    layout: {
+      head: { style: 'dot', size: 11.5, font: 'gothic', bold: true, showTitle: false, gap: 2 },
+      spaceBefore: 7,
+      spaceAfterHead: 1.5,
+      pageNumber: 'plain',
+    },
+    meta: { showDifficulty: false },
+  },
+  {
+    id: 'blank',
+    name: 'まっさら（ここから作る）',
+    desc: '番号だけの最小限。自分で一から整える出発点に',
+    layout: {
+      head: { style: 'number', size: 11, font: 'mincho', bold: false, showTitle: false, gap: 2, position: 'inline' },
+      titleBlock: false,
+      spaceBefore: 5,
+      spaceAfterHead: 0,
+      pageNumber: 'none',
+      sub: { indent: 6, sep: 1.5 },
+    },
+    meta: { showDifficulty: false },
+  },
+  {
     id: 'teiki',
     name: '定期テスト風',
     desc: '□枠囲みの大問・解答スペースあり',
@@ -239,8 +268,39 @@ export function applyTheme(meta, theme) {
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const escH = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** 「自作（LaTeX）」の見出し → TeX のマクロ本体（{n} → #1、{I} → ローマ数字。ほかの # は文字として出す） */
+export function customHeadTex(tpl) {
+  return String(tpl || '{n}')
+    .replace(/\\?#/g, '\\#')
+    .replace(/\{n\}/g, '#1')
+    .replace(/\{I\}/g, '\\Roman{lpetmp}');
+}
+
+/** 「自作（LaTeX）」の見出しを、プレビュー用におおまかに HTML にする（よく使う命令だけ） */
+export function customHeadHtml(tpl, n) {
+  let s = escH(String(tpl || '{n}'))
+    .replace(/\{n\}/g, String(n))
+    .replace(/\{I\}/g, ROMAN[n] || String(n));
+  for (let k = 0; k < 6; k++) {
+    const before = s;
+    s = s
+      .replace(/\\textbf\{([^{}]*)\}/g, '<b>$1</b>')
+      .replace(/\\(?:textit|emph)\{([^{}]*)\}/g, '<i>$1</i>')
+      .replace(/\\underline\{([^{}]*)\}/g, '<u>$1</u>')
+      .replace(/\\(?:fbox|framebox)(?:\[[^\]]*\])*\{([^{}]*)\}/g, '<span class="hn-custom-box">$1</span>')
+      .replace(/\\(?:textsf|textrm|textgt|textmc|mbox|makebox(?:\[[^\]]*\])*)\{([^{}]*)\}/g, '$1')
+      .replace(/\\(?:quad|qquad)(?![a-zA-Z])/g, '&ensp;')
+      .replace(/\\(?:,|\s|hspace\*?\{[^}]*\})/g, '&thinsp;');
+    if (s === before) break;
+  }
+  // 残りの命令（書体・大きさなど）は消す
+  return s.replace(/\\[a-zA-Z]+\*?(\[[^\]]*\])?/g, '').replace(/[{}]/g, '');
+}
+
 export function headNumberHtml(h, n) {
   switch (h.style) {
+    case 'custom':
+      return customHeadHtml(h.customTex, n);
     case 'plain':
       return `${escH(h.label || '')}${h.label ? '&thinsp;' : ''}${n}`;
     case 'box': {
@@ -358,6 +418,7 @@ export function texLayoutPreamble(l, docPt = 11) {
     // 見出しの文字（例: 「物理問題　」）の後にローマ数字。文字と数字の間の空きは見出しの文字に含める
     plainRoman: `${head.label || ''}\\Roman{lpetmp}`,
     daiRoman: '第\\hspace{0.25\\zw}\\Roman{lpetmp}\\hspace{0.25\\zw}問',
+    custom: customHeadTex(head.customTex),
   }[head.style] || '#1';
   L.push('\\newcounter{lpetmp}\\newlength{\\lpehangw}');
   L.push(`\\newcommand{\\lpenum}[1]{\\setcounter{lpetmp}{#1}${num}}`);
