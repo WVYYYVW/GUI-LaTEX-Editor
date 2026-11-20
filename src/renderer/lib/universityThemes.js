@@ -901,7 +901,7 @@ UNIVERSITY_THEMES.push(
     paper: 'b5',
     marginLeft: 35.1,
     marginRight: 26.3,
-    marginTop: 38.0,
+    marginTop: 37.3, // 大きな番号の行が 0.7mm 下がる分を引いた（1 行目のベースライン 42.9mm）
     head: { style: 'box', boxRule: 'thin', boxSize: 8.1, boxHeight: 6.1, font: 'mincho', bold: true, size: 17, position: 'inline', outdent: 8.1, showTitle: false, gap: 3.9 },
     spaceBefore: 0,
     parIndent: false,
@@ -919,7 +919,7 @@ UNIVERSITY_THEMES.push(
     paper: 'b5',
     marginLeft: 31.0,
     marginRight: 26.0,
-    marginTop: 26.5,
+    marginTop: 25.3, // 大きな番号の行が 1.2mm 下がる分を引いた（番号の行のベースライン約 31.4mm）
     head: { style: 'box', boxRule: 'thick', boxSize: 8.8, boxHeight: 7.4, font: 'gothic', bold: false, size: 17, position: 'inline', outdent: 7.0, showTitle: false, gap: 3.5 },
     spaceBefore: 0,
     parIndent: false,
@@ -940,7 +940,7 @@ UNIVERSITY_THEMES.push(
     paper: 'a4',
     marginLeft: 36.0,
     marginRight: 33.0,
-    marginTop: 30.5,
+    marginTop: 29.6, // 番号の行が 0.9mm 下がる分を引いた（1 行目のベースライン 35.4mm）
     head: { style: 'box', boxRule: 'thick', boxSize: 7.1, font: 'gothic', bold: true, size: 14, position: 'inline', outdent: 7.4, showTitle: false, gap: 3.5 },
     spaceBefore: 14,
     parIndent: false,
