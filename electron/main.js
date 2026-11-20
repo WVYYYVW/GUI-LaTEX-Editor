@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const fssync = require('node:fs');
 const tex = require('./tex');
 const { readDocxXml } = require('./zip');
+const { initAutoUpdate, checkForUpdates, RELEASES_URL } = require('./updater');
 
 const isMac = process.platform === 'darwin';
 // 問題集ファイルの拡張子。以前の .mathprob も開ける
@@ -132,6 +133,15 @@ function buildMenu() {
         { type: 'separator' },
         { role: 'reload', label: '再読み込み' },
         { role: 'toggleDevTools', label: '開発者ツール' },
+      ],
+    },
+    {
+      label: 'ヘルプ',
+      submenu: [
+        { label: '更新を確認…', click: () => checkForUpdates({ manual: true }) },
+        { label: 'ダウンロードのページを開く', click: () => shell.openExternal(RELEASES_URL) },
+        { type: 'separator' },
+        { label: `バージョン ${app.getVersion()}`, enabled: false },
       ],
     },
   ];
@@ -455,6 +465,8 @@ if (!gotLock) {
     buildMenu();
     registerIpc();
     createWindow();
+    // 新しい版を確かめる（設定で切れる）
+    initAutoUpdate(() => mainWindow, { enabled: () => loadSettings().autoUpdate !== false });
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

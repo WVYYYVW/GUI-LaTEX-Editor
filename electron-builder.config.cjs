@@ -10,6 +10,10 @@ const macNotarize =
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
+  // 自動更新は GitHub の Release から（latest.yml / latest-mac.yml を一緒に添付する）
+  publish: [{ provider: 'github', owner: 'WVYYYVW', repo: 'GUI-LaTEX-Editor' }],
+  // macOS で自動の入れ替えができるのは Developer ID で署名したときだけ（electron/updater.js が見る）
+  extraMetadata: { macAutoUpdate: macSign },
   appId: 'io.github.wvyyyvw.latexproblemeditor',
   productName: 'LaTeX Problem Editor',
   files: ['electron/**/*', 'dist/renderer/**/*', 'package.json'],
@@ -26,9 +30,9 @@ module.exports = {
     // 公証には Hardened Runtime が必要（Electron 用の entitlements は electron-builder の既定を使う）
     hardenedRuntime: macSign,
     notarize: macNotarize,
-    artifactName: '${productName}-${version}-mac-${arch}.${ext}',
+    artifactName: 'LaTeX-Problem-Editor-${version}-mac-${arch}.${ext}',
     category: 'public.app-category.education',
   },
   win: { target: ['nsis'] },
-  nsis: { oneClick: false, allowToChangeInstallationDirectory: true },
+  nsis: { oneClick: false, allowToChangeInstallationDirectory: true, artifactName: 'LaTeX-Problem-Editor-Setup-${version}.${ext}' },
 };

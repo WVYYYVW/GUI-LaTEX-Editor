@@ -1206,6 +1206,7 @@ async function openSettings() {
   const s = await api.getSettings();
   form.elements.namedItem('enginePath').value = s.enginePath || '';
   form.elements.namedItem('autoHalfwidth').checked = s.autoHalfwidth !== false;
+  form.elements.namedItem('autoUpdate').checked = s.autoUpdate !== false;
   $('#sd-engine-hint').textContent = s.detectedEngine
     ? `自動検出: ${s.detectedEngine}（空欄なら自動検出を使います）`
     : 'LuaLaTeX が見つかりません。TeX Live（Windows）または MacTeX（macOS）をインストールしてください。';
@@ -1251,6 +1252,7 @@ form.addEventListener('submit', async (e) => {
   const appSettings = {
     enginePath: form.elements.namedItem('enginePath').value.trim(),
     autoHalfwidth: form.elements.namedItem('autoHalfwidth').checked,
+    autoUpdate: form.elements.namedItem('autoUpdate').checked,
   };
   const r = await api.setSettings(appSettings);
   state.settings = { ...state.settings, ...appSettings };
