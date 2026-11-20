@@ -354,6 +354,7 @@ function renderSheetPreview(el) {
 }
 
 function renderPreview() {
+  if ($('.workspace').classList.contains('hide-preview')) return; // 隠している間は描かない（表示したときに描く）
   const el = $('#preview');
   const scroll = el.scrollTop;
   if (state.previewMode === 'sheet') {
@@ -1355,6 +1356,8 @@ const actions = {
   'move-up': () => currentProblem() && moveProblem(state.selectedId, currentIndex() - 1),
   'move-down': () => currentProblem() && currentIndex() < state.doc.problems.length - 1 && moveProblem(state.selectedId, currentIndex() + 1),
   'math-editor': () => openMathEditor(),
+  'toggle-list': () => setPaneVisible('list', $('.workspace').classList.contains('hide-list')),
+  'toggle-preview': () => setPaneVisible('preview', $('.workspace').classList.contains('hide-preview')),
   'smart-paste': () => openPasteDialog(),
   'ai-prompt': () => openPasteDialog({ prompt: true }),
   'copy-word': copyWordAtCursor,
@@ -1363,6 +1366,31 @@ const actions = {
 };
 
 api.onMenu((action, payload) => actions[action]?.(payload));
+
+// ---------------- 一覧・プレビューの表示 ----------------
+// 隠すとエディタを広く使える。次に起動したときも同じにする（この PC の中だけに覚える）
+function setPaneVisible(which, show, remember = true) {
+  $('.workspace').classList.toggle(`hide-${which}`, !show);
+  $(`[data-action="toggle-${which}"]`).setAttribute('aria-pressed', String(show));
+  if (remember) {
+    try {
+      localStorage.setItem(`pane-${which}`, show ? '1' : '0');
+    } catch {
+      /* 覚えられなくても表示は切り替わる */
+    }
+  }
+  if (show && which === 'preview') renderPreview();
+  window.dispatchEvent(new Event('resize')); // 用紙の拡大率を合わせ直す
+}
+for (const which of ['list', 'preview']) {
+  let v = null;
+  try {
+    v = localStorage.getItem(`pane-${which}`);
+  } catch {
+    /* 既定のまま */
+  }
+  if (v === '0') setPaneVisible(which, false, false);
+}
 $$('[data-action]').forEach((b) => b.addEventListener('click', () => actions[b.dataset.action]?.()));
 
 // ---------------- 起動 ----------------
