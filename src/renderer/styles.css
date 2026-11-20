@@ -206,6 +206,9 @@ li.li-custom .li-label { position: absolute; left: -2.3em; }
 .sh-stars { margin-left: auto; font-size: 12px; color: #b07a00; }
 .sh-answer { margin-top: 6px; padding-left: 10px; border-left: 3px solid #ddd; }
 .sh-answers { margin-top: 24px; border-top: 1px solid #bbb; padding-top: 8px; }
+/* 画面のプレビューでは、見えていない問題の組版を後回しにする（問題が多いときの重さ対策）。
+   2 段組は段の高さを揃えるのに全部の高さが要るので対象外。先頭は上の余白の重なり方を変えないよう対象外 */
+#preview .sheet:not(.cols-2) .sh-item + .sh-item { content-visibility: auto; contain-intrinsic-size: auto 60mm; }
 .sh-answers h2 { font-size: 18px; text-align: center; margin: 4px 0 12px; }
 
 /* ステータスバー */

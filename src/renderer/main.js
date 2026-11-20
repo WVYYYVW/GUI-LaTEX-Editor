@@ -3,7 +3,7 @@ import './styles.css';
 import { MathfieldElement } from 'mathlive';
 import katex from 'katex';
 import { createEditor } from './lib/editor.js';
-import { renderLatex, renderSheet, renderInline, renderMath, collectMacros, contentStyle } from './lib/preview.js';
+import { renderLatex, renderSheet, renderSheetParts, joinSheet, renderInline, renderMath, collectMacros, contentStyle } from './lib/preview.js';
 import { buildTex, locateLine } from './lib/texExport.js';
 import { PALETTE } from './lib/palette.js';
 import { newDocument, newProblem, normalizeDoc } from './lib/model.js';
@@ -15,7 +15,7 @@ import { initLayoutPanel, fitPages, enableSpaceDrag } from './layoutPanel.js';
 import { paperSize, normalizeLayout, SUBJECTS } from './lib/layout.js';
 import { initFigureDialog } from './figureDialog.js';
 import { figureBlock, findFigures } from './lib/figure.js';
-import { setImageResolver } from './lib/preview.js';
+import { setImageResolver, clearRenderCache } from './lib/preview.js';
 import { docxToProblems, docxToLatex } from './lib/docxImport.js';
 
 const api = window.api;
@@ -301,13 +301,56 @@ const schedulePreview = () => {
   previewTimer = setTimeout(renderPreview, 150);
 };
 
+// いま画面に出ているプリント全体の部品（変わった問題だけを差し替えるため）
+let shownSheet = null;
+
+/** 変わった .sh-item だけを差し替える */
+function patchItems(container, before, after, cls) {
+  const nodes = container.children;
+  for (let i = 0; i < after.length; i++) {
+    if (after[i] === before[i]) continue;
+    const t = document.createElement('template');
+    t.innerHTML = `<div class="${cls}" data-item="${i}">${after[i]}</div>`;
+    nodes[i].replaceWith(t.content.firstChild);
+  }
+}
+
+/**
+ * プリント全体を描く。問題が数十題あると HTML が数 MB になり、作り直すたびに数秒止まるので、
+ * 前回から変わった問題・解答だけを差し替える（全体の設定や問題の数が変わったときだけ作り直す）。
+ */
+function renderSheetPreview(el) {
+  const parts = renderSheetParts(state.doc, state.macros, { interactive: true });
+  const prev = shownSheet;
+  shownSheet = parts;
+  const probs = el.querySelector('.sh-problems');
+  const ans = el.querySelector('.sh-ans-list');
+  if (
+    prev &&
+    probs &&
+    prev.head === parts.head &&
+    prev.mid === parts.mid &&
+    prev.tail === parts.tail &&
+    prev.items.length === parts.items.length &&
+    prev.answers.length === parts.answers.length &&
+    probs.children.length === parts.items.length &&
+    (ans?.children.length ?? 0) === parts.answers.length
+  ) {
+    patchItems(probs, prev.items, parts.items, 'sh-item');
+    if (ans) patchItems(ans, prev.answers, parts.answers, 'sh-item sh-ans-item');
+    return;
+  }
+  el.innerHTML = joinSheet(parts);
+  fitPages(el);
+}
+
 function renderPreview() {
   const el = $('#preview');
   const scroll = el.scrollTop;
   if (state.previewMode === 'sheet') {
-    el.innerHTML = renderSheet(state.doc, state.macros, { interactive: true });
-    fitPages(el);
+    renderSheetPreview(el);
   } else {
+    shownSheet = null;
     const p = currentProblem();
     if (!p) {
       el.innerHTML = '';
@@ -1142,6 +1185,7 @@ function resolveImage(file) {
       .then((url) => imageCache.set(key, url || null))
       .catch(() => imageCache.set(key, null))
       .finally(() => {
+        clearRenderCache();
         renderPreview();
         figureDialog.refresh();
       });

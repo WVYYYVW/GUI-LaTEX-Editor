@@ -17,11 +17,18 @@ function setPath(obj, path, v) {
 /** 用紙プレビューをコンテナの幅に合わせて縮小表示する */
 export function fitPages(container) {
   const avail = container.clientWidth - 36;
-  for (const page of $$('.page', container)) {
-    page.style.zoom = '1';
-    const z = Math.min(1.25, avail / page.offsetWidth);
-    page.style.zoom = String(Math.max(0.3, z));
-  }
+  const pages = $$('.page', container);
+  // 元の幅は最初に 1 回だけ測って覚えておく。拡大率を 1 に戻して測り直すと、問題が多いとき
+  // ページ全体のレイアウトをやり直すことになり数秒止まる。読み取りをまとめてから書き込む
+  const natural = pages.map((page) => {
+    if (!page.dataset.naturalWidth) page.dataset.naturalWidth = String(page.offsetWidth);
+    return Number(page.dataset.naturalWidth);
+  });
+  pages.forEach((page, i) => {
+    if (!natural[i]) return;
+    const z = String(Math.max(0.3, Math.min(1.25, avail / natural[i])));
+    if (page.style.zoom !== z) page.style.zoom = z;
+  });
 }
 
 /**

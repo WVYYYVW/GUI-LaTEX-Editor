@@ -280,11 +280,51 @@ export function contentStyle(layout) {
 
 const stars = (n) => (n > 0 ? `<span class="sh-stars">難易度 ${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>` : '');
 
+// 問題ごとの HTML のキャッシュ（数式の組版は重いので、変わっていない問題は前回の結果を使う）
+const itemCache = { macros: null, map: new Map() };
+/** 画像の読み込みが終わったときなど、描き直しが必要になったら呼ぶ */
+export function clearRenderCache() {
+  itemCache.map.clear();
+}
+function cached(key, make) {
+  let v = itemCache.map.get(key);
+  if (v === undefined) {
+    if (itemCache.map.size > 3000) itemCache.map.clear();
+    v = make();
+    itemCache.map.set(key, v);
+  }
+  return v;
+}
+
 /**
  * プリント全体の HTML。用紙サイズ・余白・見出しを mm / pt 単位で描くので、PDF とほぼ同じ見た目になる。
  * @param {{interactive?:boolean}} opts interactive のとき解答スペースのドラッグ用ハンドルを付ける
  */
 export function renderSheet(doc, macros, opts = {}) {
+  return joinSheet(renderSheetParts(doc, macros, opts));
+}
+
+/** renderSheetParts の結果をつなげて 1 つの HTML にする（問題・解答は 1 つずつ .sh-item で包む） */
+export function joinSheet(parts) {
+  return (
+    parts.head +
+    parts.items.map((h, i) => `<div class="sh-item" data-item="${i}">${h}</div>`).join('') +
+    parts.mid +
+    parts.answers.map((h, i) => `<div class="sh-item sh-ans-item" data-item="${i}">${h}</div>`).join('') +
+    parts.tail
+  );
+}
+
+/**
+ * プリント全体を「前（表紙・見出し）」「問題ごと」「間」「解答ごと」「後」に分けて作る。
+ * 画面では、変わった問題・解答だけを差し替えるのに使う。
+ * @returns {{head:string, items:string[], mid:string, answers:string[], tail:string}}
+ */
+export function renderSheetParts(doc, macros, opts = {}) {
+  if (itemCache.macros !== macros) {
+    itemCache.macros = macros;
+    itemCache.map.clear();
+  }
   const m = doc.meta;
   const l = normalizeLayout(m.layout);
   const h = l.head;
@@ -328,7 +368,19 @@ export function renderSheet(doc, macros, opts = {}) {
     out += '</header>';
   }
   out += '<div class="sh-problems">';
-  ps.forEach((p, i) => {
+  const head = out;
+  // 各大問の後の改ページ（白紙・下書き用紙）。余白の重なり方を変えないよう、次の大問の先頭に入れる
+  let afterEachHtml = '';
+  if (l.afterEach === 'blank') afterEachHtml = '<div class="sh-pagebreak"><span>改ページ（白紙のページ）</span></div>';
+  else if (l.afterEach === 'draft') {
+    const pages = Math.max(1, Math.min(6, Math.round(Number(l.draftPages) || 1)));
+    afterEachHtml = `<div class="sh-pagebreak"><span>改ページ（${esc(l.draftText || '下書き用紙')}${pages > 1 ? ` × ${pages} ページ` : ''}）</span></div>`;
+  }
+  // 問題の HTML に効く設定（変わったらキャッシュを使わない）
+  const ctx = JSON.stringify([l, m.answerMode, m.spaceAfter, m.showDifficulty, !!opts.interactive]);
+  const items = ps.map((p, i) =>
+    cached('p' + ctx + JSON.stringify([i, ps.length, p.title, p.body, p.solution, p.points, p.difficulty, p.layout]), () => {
+    let out = i > 0 ? afterEachHtml : '';
     const pl = { pageBreakBefore: false, answerSpace: null, frame: null, ...(p.layout || {}) };
     const n = i + 1;
     const brk = i > 0 && (pl.pageBreakBefore || l.newPageEach);
@@ -371,29 +423,30 @@ export function renderSheet(doc, macros, opts = {}) {
       out += `<div style="margin-left:${l.bodyIndent}mm">${body}${answer}</div>${spaceEl}`;
     }
     out += '</section>';
-    if (l.afterEach === 'blank') out += '<div class="sh-pagebreak"><span>改ページ（白紙のページ）</span></div>';
-    else if (l.afterEach === 'draft') {
-      const pages = Math.max(1, Math.min(6, Math.round(Number(l.draftPages) || 1)));
-      out += `<div class="sh-pagebreak"><span>改ページ（${esc(l.draftText || '下書き用紙')}${pages > 1 ? ` × ${pages} ページ` : ''}）</span></div>`;
-    }
-  });
-  out += '</div>';
-  if (l.endText) out += `<div class="sh-endtext">${esc(l.endText)}</div>`;
+    if (i === ps.length - 1) out += afterEachHtml;
+    return out;
+    })
+  );
+  let mid = '</div>';
+  if (l.endText) mid += `<div class="sh-endtext">${esc(l.endText)}</div>`;
+  let answers = [];
+  let tail = '';
   if ((m.answerMode === 'end' || m.answerMode === 'separate') && ps.some((p) => p.solution.trim())) {
-    out += `<div class="sh-answers${m.answerMode === 'separate' ? ' separate' : ''}">`;
-    if (m.answerMode === 'separate') out += '<div class="sh-pagebreak"><span>改ページ</span></div>';
-    out += '<h2>解答</h2>';
-    ps.forEach((p, i) => {
-      if (!p.solution.trim()) return;
-      out += `<section class="sh-problem"><div class="sh-head"><span class="sh-num" style="${headCss}">${headNumberHtml(h, i + 1)}</span>${p.title ? `<span class="sh-title">${renderInline(p.title, macros)}</span>` : ''}</div><div class="sh-body">${renderLatex(punct(p.solution), macros)}</div></section>`;
-    });
-    out += '</div>';
+    mid += `<div class="sh-answers${m.answerMode === 'separate' ? ' separate' : ''}">`;
+    if (m.answerMode === 'separate') mid += '<div class="sh-pagebreak"><span>改ページ</span></div>';
+    mid += '<h2>解答</h2><div class="sh-ans-list">';
+    answers = ps.map((p, i) =>
+      !p.solution.trim()
+        ? ''
+        : cached('a' + ctx + JSON.stringify([i, p.title, p.solution]), () => `<section class="sh-problem"><div class="sh-head"><span class="sh-num" style="${headCss}">${headNumberHtml(h, i + 1)}</span>${p.title ? `<span class="sh-title">${renderInline(p.title, macros)}</span>` : ''}</div><div class="sh-body">${renderLatex(punct(p.solution), macros)}</div></section>`)
+    );
+    tail = '</div></div>';
   }
   // 表紙は別のページとして先頭に置く
   const cover = m.cover?.enabled
     ? coverPage(m.cover, ps.length, `width:${w}mm;min-height:${paperH}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt`, punct)
     : '';
-  return cover + out + '</div>';
+  return { head: cover + head, items, mid, answers, tail: tail + '</div>' };
 }
 
 function coverPage(c, count, style, punct) {
