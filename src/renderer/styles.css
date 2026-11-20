@@ -573,6 +573,8 @@ code { font-family: var(--mono); font-size: 0.95em; }
 }
 .pv-partbody:not(:first-child) > .pv-par:first-child > .pv-part:first-child { margin-top: var(--part-sb, 4mm); }
 .part-arabicKikko .pv-part::before { content: '〔' counter(lpepart) '〕'; }
+/* 小問のまとまりの前だけに足す空き */
+.page ol:not(ol ol) { margin-top: calc(var(--sub-gap) + var(--sub-before, 0mm)) !important; }
 /* 2 段目の小問（小問の中の小問） */
 .page[class*='sub2-'] ol ol { list-style: none; counter-reset: en; padding-left: var(--sub2-indent) !important; margin-top: var(--sub2-gap) !important; margin-bottom: var(--sub2-gap) !important; }
 .page[class*='sub2-'] ol ol > li { counter-increment: en; position: relative; margin-bottom: var(--sub2-gap); }
@@ -586,8 +588,10 @@ code { font-family: var(--mono); font-size: 0.95em; }
 .page.sub2-wrapleft ol ol { padding-left: var(--sub2-wrap) !important; }
 .page.sub2-wrapleft ol ol > li::before { position: static !important; display: inline-block; margin-left: calc(var(--sub2-indent) - var(--sub2-wrap)); margin-right: var(--sub2-sep); }
 /* 「問」が太字の小問番号・太字の片仮名 */
-.sub-toiBold ol.en-decimal, .sub-toiBoldDot ol.en-decimal, .sub-kataBold ol.en-decimal { list-style: none; counter-reset: en; padding-left: 2.4em; }
-.sub-toiBold ol.en-decimal > li, .sub-toiBoldDot ol.en-decimal > li, .sub-kataBold ol.en-decimal > li { counter-increment: en; position: relative; }
+.sub-toiBold ol.en-decimal, .sub-toiBoldDot ol.en-decimal, .sub-kataBold ol.en-decimal, .sub-numBold ol.en-decimal, .sub-toiParenFull ol.en-decimal { list-style: none; counter-reset: en; padding-left: 2.4em; }
+.sub-toiBold ol.en-decimal > li, .sub-toiBoldDot ol.en-decimal > li, .sub-kataBold ol.en-decimal > li, .sub-numBold ol.en-decimal > li, .sub-toiParenFull ol.en-decimal > li { counter-increment: en; position: relative; }
+.sub-numBold ol.en-decimal > li::before { content: counter(en); position: absolute; font-family: var(--sans); font-weight: 700; }
+.sub-toiParenFull ol.en-decimal > li::before { content: '（問 ' counter(en) '）'; position: absolute; }
 .sub-toiBold ol.en-decimal > li::before { content: '問 ' counter(en); position: absolute; font-family: var(--sans); font-weight: 700; }
 .sub-toiBoldDot ol.en-decimal > li::before { content: '問 ' counter(en) '.'; position: absolute; font-family: var(--sans); font-weight: 700; }
 .sub-kataBold ol.en-decimal > li::before { content: counter(en, katakana); position: absolute; font-family: var(--sans); font-weight: 700; }

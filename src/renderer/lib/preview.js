@@ -4,7 +4,7 @@ import { SCIENCE_MACROS, normalizeNumbers } from './chem.js'; // \ce{…}（化�
 import { findMathRanges, maskComments } from './mathRanges.js';
 import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins, defaultCover, coverPositions, COVER_NUMBERS } from './layout.js';
 import { findFigures, figureToSvg } from './figure.js';
-import { coverNotes, coverNoteItems } from './texExport.js';
+import { coverNotes, coverNoteItems, coverNotesGeometry } from './texExport.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -366,6 +366,7 @@ export function renderSheet(doc, macros, opts = {}) {
   ].filter(Boolean).join(' ');
   const vars =
     `--sub-indent:${Number(s.indent)}mm;--sub-sep:${Number(s.sep)}mm;--sub-gap:${Number(s.gap)}mm;--sub-wrap:${Number(s.wrapIndent) || 0}mm;--math-indent:${Number(l.mathIndent)}mm;--par-skip:${Number(l.parSkip)}mm;` +
+    (Number(s.before) ? `--sub-before:${Number(s.before)}mm;` : '') +
     (Number(l.displaySkip) > 0 ? `--disp-above:${Number(l.displaySkipAbove) > 0 ? Number(l.displaySkipAbove) : Number(l.displaySkip)}mm;--disp-below:${Number(l.displaySkip)}mm;` : '') +
     contentStyle(l).vars;
   // 上下左右の余白（個別指定があればそれを使う。PDF と同じ考え方）
@@ -469,11 +470,11 @@ function cvAt(B, sizePt, html, { align = 'center', left, right, family, weight =
 }
 
 /** 注意事項（番号付き。「|」の行は表） */
-function noteListHtml(text, count, punct, macros, { label, num, textX, wrap, pitch, fontPt }) {
+function noteListHtml(text, count, punct, macros, { label, num, textX, wrap, pitch, fontPt, itemGap = 0 }) {
   const items = coverNoteItems(text, count);
   let h = `<div class="cv-list" style="font-size:${fontPt}pt;line-height:${pitch.toFixed(2)}mm">`;
   items.forEach((it, i) => {
-    h += `<div class="cv-item" style="padding-left:${wrap}mm;text-indent:${(textX - wrap).toFixed(2)}mm;position:relative">`;
+    h += `<div class="cv-item" style="padding-left:${wrap}mm;text-indent:${(textX - wrap).toFixed(2)}mm;position:relative${i && itemGap ? `;margin-top:${Number(itemGap)}mm` : ''}">`;
     h += `<span class="cv-num" style="position:absolute;left:${num}mm;text-indent:0">${esc(label(i + 1))}</span>${renderInline(punct(it.text), macros)}`;
     if (it.rows.length) {
       h += `<table class="cv-table" style="margin:${(4.0 - 0.7 * pitch + 0.3 * pitch).toFixed(2)}mm ${(textX - wrap).toFixed(2)}mm ${(6.6 - 0.7 * pitch).toFixed(2)}mm;width:calc(100% - ${(2 * (textX - wrap)).toFixed(2)}mm)">`;
@@ -498,23 +499,30 @@ function coverPage(c, count, style, punct, macros, geo) {
 
 function coverStandard(c, count, style, punct, macros, geo) {
   const P = coverPositions(c, geo.top);
+  const fam = (f) => (f === 'mincho' ? 'var(--serif)' : 'var(--sans)');
   let h = `<div class="sheet page cover-page" style="${style}">`;
   const headers = String(c.header || '').split('|').filter((s) => s.trim());
-  headers.forEach((t, i) => (h += cvAt(P.header[i], Number(c.headerSize) || 15, esc(t.trim()), { align: c.headerAlign || 'center', family: 'var(--sans)' }, geo)));
+  headers.forEach((t, i) => (h += cvAt(P.header[i], Number(c.headerSize) || 15, esc(t.trim()), { align: c.headerAlign || 'center', family: fam(c.headerFont) }, geo)));
   if (c.subject) {
     const sz = Number(c.subjectSize) || 34;
-    const sub = c.subtitle ? `<span style="font-size:${Math.max(10, sz * 0.5)}pt;font-weight:400;margin-left:0.5em">${esc(c.subtitle)}</span>` : '';
-    h += cvAt(P.subject, sz, esc(c.subject) + sub, { family: c.subjectFont === 'mincho' ? 'var(--serif)' : 'var(--sans)', weight: c.subjectBold ? 700 : 400 }, geo);
+    const sub = c.subtitle ? `<span style="font-size:${Math.max(10, sz * 0.6)}pt;margin-left:0.5em">${esc(c.subtitle)}</span>` : '';
+    h += cvAt(P.subject, sz, esc(c.subject) + sub, { family: fam(c.subjectFont), weight: c.subjectBold ? 700 : 400 }, geo);
   }
-  if (c.target) h += cvAt(P.target, 15, esc(c.target), { family: 'var(--sans)' }, geo);
-  if (c.points) h += cvAt(P.points, 12, esc(c.points), {}, geo);
-  if (c.time) h += cvAt(P.time, 12, `${c.timeLabel ? `${esc(c.timeLabel)}　` : ''}${esc(c.time)}`, { family: 'var(--sans)' }, geo);
+  if (c.target) h += cvAt(P.target, Number(c.targetSize) || 15, esc(c.target), { family: 'var(--sans)' }, geo);
+  if (c.points) h += cvAt(P.points, Number(c.pointsSize) || 12, esc(c.points), {}, geo);
+  if (c.time) h += cvAt(P.time, Number(c.timeSize) || 12, `${c.timeLabel ? `${esc(c.timeLabel)}　` : ''}${esc(c.time)}`, { family: fam(c.timeFont), align: c.timeAlign || 'center' }, geo);
   const pitch = Number(c.notesPitch) > 0 ? Number(c.notesPitch) : 6.0;
+  const nsz = Number(c.notesSize) > 0 ? Number(c.notesSize) : 10.5;
   const num = COVER_NUMBERS[c.notesNumber] || COVER_NUMBERS.dot;
-  const list = noteListHtml(c.notes, count, punct, macros, { label: num.html, num: 1.0, textX: 7.0, wrap: 7.0, pitch, fontPt: 10.5 });
-  const title = c.notesTitle ? `<div class="cv-notes-title" style="text-align:${c.notesTitleAlign === 'center' ? 'center' : 'left'}">${esc(c.notesTitle)}</div>` : '';
-  const top = (P.notes - 0.88 * mmOf(10.5)).toFixed(2);
-  h += `<div class="cv-notes${c.notesFrame ? ' framed' : ''}" style="position:absolute;top:${top}mm;left:${geo.left}mm;right:${geo.right}mm;line-height:${pitch}mm">${title}${list}</div>`;
+  const g = coverNotesGeometry(c, geo.left, geo.w - geo.left - geo.right);
+  const list = noteListHtml(c.notes, count, punct, macros, { label: num.html, num: g.num, textX: g.text, wrap: g.wrap, pitch, fontPt: nsz, itemGap: c.notesItemGap });
+  const tsz = Number(c.notesTitleSize) > 0 ? Number(c.notesTitleSize) : nsz;
+  const tx = Number(c.notesTitleX) > 0 ? Number(c.notesTitleX) - geo.left : 0;
+  const title = c.notesTitle
+    ? `<div class="cv-notes-title" style="font-size:${tsz}pt;text-align:${c.notesTitleAlign === 'center' ? 'center' : 'left'};padding-left:${tx}mm;height:${(c.notesGap != null && c.notesGap !== '' ? Number(c.notesGap) : pitch).toFixed(2)}mm;margin:0">${esc(c.notesTitle)}</div>`
+    : '';
+  const top = (P.notes - 0.88 * mmOf(tsz) - (pitch - mmOf(tsz)) / 2).toFixed(2);
+  h += `<div class="cv-notes${c.notesFrame ? ' framed' : ''}" style="position:absolute;top:${top}mm;left:${geo.left}mm;right:${(geo.right + g.right).toFixed(2)}mm;line-height:${pitch}mm;margin:0">${title}${list}</div>`;
   h += `<div class="cv-bottom" style="position:absolute;left:${geo.left}mm;right:${geo.right}mm;bottom:${geo.bottom}mm">`;
   if (c.idField) {
     const labels = String(c.idLabels || '受験番号|氏　　名').split('|').filter(Boolean);
@@ -525,6 +533,7 @@ function coverStandard(c, count, style, punct, macros, geo) {
   if (c.pageNumber) h += cvPageNumber(geo);
   return h + '</div>';
 }
+
 
 /** 共通テストの表紙（位置は texExport.js の texCoverKyotsu と同じ） */
 function coverKyotsu(c, count, style, punct, macros, geo) {

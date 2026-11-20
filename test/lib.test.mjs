@@ -316,7 +316,7 @@ test('新しい項目は既定値で補い、古いファイルも開ける', ()
   assert.equal(d.meta.cover.backNotes, '');
   // 従来のテーマの TeX には新しい命令が入らない
   const doc = newDocument(true);
-  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-tohoku'));
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-nagoya'));
   const tex = buildTex(doc);
   assert.doesNotMatch(tex, /InsertMark|lpeplain\}\n|\\setlist\[enumerate,2\]/);
 });
@@ -336,4 +336,65 @@ test('enumitem では ⑴・⒜・ア の番号を * 付きで使う（enumitem 
   const tex = buildTex(doc);
   assert.match(tex, /\\AddEnumerateCounter\{\\lpepparen\}\{\\lpe@ppn\}\{⑽\}/);
   assert.match(tex, /\\setlist\[enumerate,1\]\{label=\\lpepparen\*,/);
+});
+
+import { UNVERIFIED_UNIVERSITIES } from '../src/renderer/lib/universityThemes.js';
+import { renderSheet } from '../src/renderer/lib/preview.js';
+
+test('追加した大学のテーマ: 横長の枠・[ Ⅰ ]・小問の前の空き・（問 1）', () => {
+  const make = (id) => {
+    const doc = newDocument(true);
+    applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === id));
+    return buildTex(doc);
+  };
+  for (const id of ['univ-waseda', 'univ-hiroshima', 'univ-chiba', 'univ-tus', 'univ-kumamoto', 'univ-okayama', 'univ-kanazawa']) {
+    assert.ok(UNIVERSITY_THEMES.some((t) => t.id === id), id);
+  }
+  // 千葉: 8.1×6.1mm の枠
+  assert.match(make('univ-chiba'), /\\vbox to \\dimexpr6\.1mm-2\\fboxrule\\relax\{\\vss\\hbox to \\dimexpr8\.1mm-2\\fboxrule/);
+  // 早稲田: [ Ⅰ ]（数字は太字）と小問の前だけの空き
+  const w = make('univ-waseda');
+  assert.match(w, /\[\\hspace\{0\.3em\}\{\\bfseries\\Roman\{lpetmp\}\}\\hspace\{0\.3em\}\]/);
+  assert.match(w, /\\AddToHook\{env\/enumerate\/before\}\{\\ifnum\\@enumdepth=0 \\par\\vspace\{2\.6mm\}\\fi\}/);
+  // 熊本: （問 1）
+  assert.match(make('univ-kumamoto'), /（問\\,\\arabic\*）|（問\\,\\arabic\{enumi\}）/);
+  // 確認できなかった大学には理由を書く
+  for (const u of UNVERIFIED_UNIVERSITIES) assert.ok(u.reason.length > 10, u.name);
+  assert.ok(!UNVERIFIED_UNIVERSITIES.some((u) => u.name === '早稲田大学'));
+});
+
+test('大学の表紙: 構成と位置をテーマに持ち、PDF とプレビューの両方に出す', () => {
+  const doc = newDocument(true);
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-tokyo'));
+  const c = doc.meta.cover;
+  assert.equal(c.enabled, true);
+  assert.equal(c.notes.split('\n').length, 10);
+  const tex = buildTex(doc);
+  assert.match(tex, /入　学　試　験　問　題/);
+  assert.match(tex, /\\lpezdigit\{lpecovn\}/); // 全角数字の番号
+  assert.match(tex, /\\loop\\ifnum\\value\{page\}<3/); // 表紙に「― 1 ―」、2 ページ目は白紙
+  const html = renderSheet(doc, {});
+  assert.match(html, /cover-page/);
+  assert.match(html, /入　学　試　験　問　題/);
+  // 物理・化学のテーマは理科の冊子の表紙
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-tokyo-chem'));
+  assert.equal(doc.meta.cover.subject, '理　　　科');
+  // 表で区切った注意（九州・理科）
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-kyushu-phys'));
+  assert.match(buildTex(doc), /\\begin\{tabularx\}/);
+});
+
+test('前に表せなかったもの: 部の中身の字下げ・小問の中の小問・太字の「問」・外に出る通し番号', () => {
+  const lay = (id) => UNIVERSITY_THEMES.find((t) => t.id === id).layout;
+  assert.equal(lay('univ-tokyo-phys').part.hang, true);
+  assert.equal(lay('univ-tokyo-phys').part.bodyIndent, 3.6);
+  assert.equal(lay('univ-tokyo-phys').sub.before, 7.05);
+  assert.equal(lay('univ-kyoto-phys').sub2.label, 'aparen');
+  assert.equal(lay('univ-kyushu-phys').subLabel, 'toiBoldDot');
+  assert.equal(lay('univ-isct-chem').sub.indent, -2.0);
+  const doc = newDocument(true);
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-kyushu-phys'));
+  const tex = buildTex(doc);
+  assert.match(tex, /\{\\sffamily\\gtfamily\\bfseries 問\}\\,\\arabic/);
+  assert.match(tex, /\\setlist\[enumerate,2\]\{label=\\lpepparen\*/);
 });

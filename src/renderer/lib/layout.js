@@ -16,6 +16,7 @@ export const HEAD_STYLES = [
   { id: 'roman', name: 'I, II' },
   { id: 'plainRoman', name: '問題 I' },
   { id: 'daiRoman', name: '第 I 問' },
+  { id: 'squareRoman', name: '[ I ]' },
 ];
 
 export const SUB_LABELS = [
@@ -35,6 +36,8 @@ export const SUB_LABELS = [
   { id: 'toiBold', name: '問 1（問 太字）' },
   { id: 'toiBoldDot', name: '問 1.（問 太字）' },
   { id: 'kataBold', name: 'ア（太字）' },
+  { id: 'numBold', name: '1（太字）' },
+  { id: 'toiParenFull', name: '（問 1）' },
 ];
 
 /** 大問の中の「部」（物理・化学の I, II / A, B など）。本文では \Part（ラベルを指定するときは \Part[A]）と書く */
@@ -136,6 +139,7 @@ export function defaultLayout() {
       align: 'left', // 本文の上に置くときの位置: left | center
       outdent: 0, // 番号を本文の左端より外（余白側）に出す量（mm）。「直後に本文」のとき
       boxSize: 0, // 枠囲みの番号の枠の大きさ（mm、正方形）。0 は文字に合わせる
+      boxHeight: 0, // 枠の高さ（mm）。0 は boxSize と同じ（正方形）
     },
     titleBlock: true, // プリントの表題（タイトル・氏名欄）を出す
     bodyPt: 0, // 本文の文字サイズ（pt。0 は「設定」の文字サイズ）
@@ -163,6 +167,7 @@ export function defaultLayout() {
       gap: 0, // 小問どうしの間（mm）
       wrap: 'hang', // hang: 2 行目以降を本文にそろえる / left: 左端に戻す
       wrapIndent: 0, // left のとき、2 行目以降の字下げ（mm）
+      before: 0, // 小問のまとまりの前だけに足す空き（mm。小問どうしの間の空きに加えて）
     },
     // 小問の中の小問（2 段目の enumerate）。label が空なら 1 段目と同じ扱い（従来どおり）
     sub2: {
@@ -295,6 +300,22 @@ export function defaultCover() {
     notesNumber: 'dot', // dot: 1. / zdot: 1．/ plain: 1 / paren: (1) / pparen: ⑴
     notesFrame: false, // 注意事項を枠で囲む
     notesPitch: 0, // 注意事項の行送り（mm。0 は既定）
+    notesSize: 0, // 注意事項の文字の大きさ（pt。0 は 10.5pt）
+    notesTitleSize: 0, // 注意事項の見出しの大きさ（pt。0 は注意事項と同じ）
+    notesTitleX: 0, // 見出しの左端（用紙の左端から mm。0 は本文の左端）
+    notesGap: null, // 見出しのベースラインから最初の項目のベースラインまで（mm。null は行送りと同じ。0 は見出しと同じ行）
+    notesItemGap: 0, // 項目と項目の間に足す空き（mm）
+    timeAlign: 'center', // 試験時間の行の位置: center | left | right
+    // 注意事項の番号・本文（1 行目）・折り返し・右端の位置（用紙の左端から mm。0 は本文の左端から 1mm・7mm・7mm・本文の右端）
+    notesX: 0,
+    notesText: 0,
+    notesWrap: 0,
+    notesRight: 0,
+    headerFont: 'gothic', // 年度・試験名の書体: gothic | mincho
+    targetSize: 15,
+    pointsSize: 12,
+    timeSize: 12,
+    timeFont: 'gothic',
     // 1 行 1 項目。{n} は問題数。「|」で始まる行は表の行（「|出題科目|ページ|選択方法」のように区切る）
     notes: [
       '問題は全部で{n}題である。',
@@ -349,6 +370,9 @@ export const COVER_NUMBERS = {
   plain: { tex: '\\arabic{lpecovn}', html: (n) => `${n}` },
   paren: { tex: '(\\arabic{lpecovn})', html: (n) => `(${n})` },
   pparen: { tex: '\\lpepparen{lpecovn}', html: (n) => '⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽'[n - 1] || `(${n})` },
+  zdigit: { tex: '\\lpezdigit{lpecovn}', html: (n) => String(n).replace(/\d/g, (d) => '０１２３４５６７８９'[d]) },
+  bullet: { tex: '・', html: () => '・' },
+  none: { tex: '', html: () => '' },
 };
 
 export function applyTheme(meta, theme) {
@@ -367,12 +391,15 @@ export function applyTheme(meta, theme) {
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const escH = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** 番号の枠の高さ（boxHeight が無ければ正方形） */
+const boxH = (h) => (Number(h.boxHeight) > 0 ? Number(h.boxHeight) : Number(h.boxSize));
+
 export function headNumberHtml(h, n) {
   switch (h.style) {
     case 'plain':
       return `${escH(h.label || '')}${h.label ? '&thinsp;' : ''}${n}`;
     case 'box': {
-      const s = Number(h.boxSize) > 0 ? ` style="width:${Number(h.boxSize)}mm;height:${Number(h.boxSize)}mm"` : '';
+      const s = Number(h.boxSize) > 0 ? ` style="width:${Number(h.boxSize)}mm;height:${boxH(h)}mm"` : '';
       return `<span class="hn-box${h.boxRule === 'thick' ? ' thick' : ''}${s ? ' sized' : ''}"${s}>${n}</span>`;
     }
     case 'daiSpaced':
@@ -397,6 +424,8 @@ export function headNumberHtml(h, n) {
       return `第&thinsp;${ROMAN[n] || n}&thinsp;問`;
     case 'roman':
       return ROMAN[n] || String(n);
+    case 'squareRoman':
+      return `[&nbsp;<b>${ROMAN[n] || n}</b>&nbsp;]`;
     default:
       return String(n);
   }
@@ -465,6 +494,7 @@ export function texLayoutPreamble(l, docPt = 11) {
   // 本文の全角 1 字の幅（大きな番号の枠を本文の行の中央にそろえるのに使う）
   L.push('\\newlength{\\lpebodyzw}\\AtBeginDocument{\\setlength{\\lpebodyzw}{1\\zw}}');
   L.push('\\newcommand{\\lpepparen}[1]{\\ifcase\\value{#1}\\or ⑴\\or ⑵\\or ⑶\\or ⑷\\or ⑸\\or ⑹\\or ⑺\\or ⑻\\or ⑼\\or ⑽\\fi}');
+  L.push('\\newcommand{\\lpezdigit}[1]{\\ifcase\\value{#1}０\\or １\\or ２\\or ３\\or ４\\or ５\\or ６\\or ７\\or ８\\or ９\\or １０\\or １１\\or １２\\or １３\\else\\arabic{#1}\\fi}');
   L.push('\\newcommand{\\lpeaparen}[1]{\\ifcase\\value{#1}\\or ⒜\\or ⒝\\or ⒞\\or ⒟\\or ⒠\\or ⒡\\or ⒢\\or ⒣\\or ⒤\\or ⒥\\fi}');
   L.push(`\\definecolor{lpehead}{HTML}{${hex(head.color)}}`);
   const fam = head.font === 'mincho' ? '\\rmfamily\\mcfamily' : '\\sffamily\\gtfamily';
@@ -481,7 +511,8 @@ export function texLayoutPreamble(l, docPt = 11) {
     box:
       Number(head.boxSize) > 0
         ? // 大きさを指定した正方形の枠。行の高さには影響させず、枠の中心を本文 1 行目の中心にそろえる
-          `{\\setlength{\\fboxsep}{0pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\raisebox{\\dimexpr0.38\\lpebodyzw-${Number(head.boxSize) / 2}mm\\relax}[0pt][0pt]{\\fcolorbox{lpehead}{white}{\\vbox to \\dimexpr${Number(head.boxSize)}mm-2\\fboxrule\\relax{\\vss\\hbox to \\dimexpr${Number(head.boxSize)}mm-2\\fboxrule\\relax{\\hss#1\\hss}\\vss}}}}`
+          // boxHeight を指定すると横長・縦長の枠（幅 boxSize × 高さ boxHeight）
+          `{\\setlength{\\fboxsep}{0pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\raisebox{\\dimexpr0.38\\lpebodyzw-${boxH(head) / 2}mm\\relax}[0pt][0pt]{\\fcolorbox{lpehead}{white}{\\vbox to \\dimexpr${boxH(head)}mm-2\\fboxrule\\relax{\\vss\\hbox to \\dimexpr${Number(head.boxSize)}mm-2\\fboxrule\\relax{\\hss#1\\hss}\\vss}}}}`
         : `{\\setlength{\\fboxsep}{1pt}\\setlength{\\fboxrule}{${head.boxRule === 'thick' ? '1.2' : '0.5'}pt}\\fcolorbox{lpehead}{white}{\\makebox[\\lpeboxw][c]{\\rule[-0.3em]{0pt}{1.25em}#1}}}`,
     daiSpaced: '第\\hspace{1\\zw}#1\\hspace{1\\zw}問',
     dot: '#1.',
@@ -496,6 +527,8 @@ export function texLayoutPreamble(l, docPt = 11) {
     // 見出しの文字（例: 「物理問題　」）の後にローマ数字。文字と数字の間の空きは見出しの文字に含める
     plainRoman: `${head.label || ''}\\Roman{lpetmp}`,
     daiRoman: '第\\hspace{0.25\\zw}\\Roman{lpetmp}\\hspace{0.25\\zw}問',
+    // 早稲田の「[ Ⅰ ]」（数字だけ太字）
+    squareRoman: '[\\hspace{0.3em}{\\bfseries\\Roman{lpetmp}}\\hspace{0.3em}]',
   }[head.style] || '#1';
   L.push('\\newcounter{lpetmp}\\newlength{\\lpehangw}');
   L.push(`\\newcommand{\\lpenum}[1]{\\setcounter{lpetmp}{#1}${num}}`);
@@ -552,6 +585,10 @@ export function texLayoutPreamble(l, docPt = 11) {
     L.push('\\newcommand{\\lpe@presub}{}');
   }
   L.push('\\makeatother');
+  // 小問のまとまりの前だけに足す空き（いちばん外側の enumerate の前）
+  if (Number(s.before)) {
+    L.push(`\\makeatletter\\ifdefined\\AddToHook\\AddToHook{env/enumerate/before}{\\ifnum\\@enumdepth=0 \\par\\vspace{${Number(s.before)}mm}\\fi}\\fi\\makeatother`);
+  }
   L.push(...texPartAndBlank(l));
   // ページ番号・ヘッダ
   // 共通テストの「— 1 —」: 全角幅の細い線（明朝の — と同じ高さ）と番号の間を 2.1mm あける
@@ -722,6 +759,8 @@ const SUB_LABEL_TEX = {
   toiBold: ['{\\sffamily\\gtfamily\\bfseries 問}\\,\\arabic{enumi}', '{\\sffamily\\gtfamily\\bfseries 問}\\,\\arabic*'],
   toiBoldDot: ['{\\sffamily\\gtfamily\\bfseries 問}\\,\\arabic{enumi}.', '{\\sffamily\\gtfamily\\bfseries 問}\\,\\arabic*.'],
   kataBold: ['{\\sffamily\\gtfamily\\bfseries\\lpekata{enumi}}', '{\\sffamily\\gtfamily\\bfseries\\lpekata*}'],
+  numBold: ['{\\sffamily\\gtfamily\\bfseries\\arabic{enumi}}', '{\\sffamily\\gtfamily\\bfseries\\arabic*}'],
+  toiParenFull: ['（問\\,\\arabic{enumi}）', '（問\\,\\arabic*）'],
 };
 
 export function texSubLabel(l) {

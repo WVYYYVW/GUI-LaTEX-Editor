@@ -1,6 +1,6 @@
 // 問題集データ → LaTeX 文書（LuaLaTeX + ltjsarticle で日本語をそのまま扱う）
 
-import { normalizeLayout, texLayoutPreamble, texProblemOpen, texSubLabel, pointsText, applyPunct, defaultCover, pageMargins, coverPositions, COVER_NUMBERS } from './layout.js';
+import { normalizeLayout, texLayoutPreamble, texProblemOpen, texSubLabel, pointsText, applyPunct, defaultCover, pageMargins, paperSize, coverPositions, COVER_NUMBERS } from './layout.js';
 import { findMathRanges } from './mathRanges.js';
 import { CHEM_PREAMBLE, expandScience } from './chem.js';
 
@@ -205,13 +205,13 @@ function texNoteTable(rows, punct, ind) {
 }
 
 /** 注意事項のリスト。label: 番号の形、geom: 番号の位置・本文の位置・折り返しの位置（項目の左端から mm） */
-function texNoteList(items, punct, { label, num, text, wrap }) {
+function texNoteList(items, punct, { label, num, text, wrap, right = 0, itemGap = 0 }) {
   const L = [];
   const lw = Math.max(0, text - num - 1.5);
   L.push(
-    `\\begin{list}{${label}}{\\usecounter{lpecovn}\\setlength{\\leftmargin}{${wrap}mm}\\setlength{\\itemindent}{${(text - wrap).toFixed(2)}mm}` +
+    `\\begin{list}{${label}}{\\usecounter{lpecovn}\\setlength{\\leftmargin}{${wrap.toFixed(2)}mm}\\setlength{\\rightmargin}{${right.toFixed(2)}mm}\\setlength{\\itemindent}{${(text - wrap).toFixed(2)}mm}` +
       `\\setlength{\\labelwidth}{${lw.toFixed(2)}mm}\\setlength{\\labelsep}{${(text - num - lw).toFixed(2)}mm}\\def\\makelabel#1{#1\\hfil}` +
-      '\\setlength{\\itemsep}{0pt}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{0pt}}'
+      `\\setlength{\\itemsep}{${Number(itemGap) || 0}mm}\\setlength{\\topsep}{0pt}\\setlength{\\partopsep}{0pt}\\setlength{\\parsep}{0pt}}`
   );
   for (const it of items) {
     L.push(`  \\item ${punct(it.text)}`);
@@ -224,9 +224,12 @@ function texNoteList(items, punct, { label, num, text, wrap }) {
 /** 表紙（試験問題冊子の表紙） */
 function texCover(c, count, punct = (t) => t, lay) {
   const L = [];
-  const top = pageMargins(lay).top;
+  const pm = pageMargins(lay);
+  const { w } = paperSize(lay);
+  const left = pm.left ?? Number(lay.margin);
+  const geo = { top: pm.top, left, w, textW: w - left - (pm.right ?? Number(lay.margin)) };
   L.push(`\\thispagestyle{${c.pageNumber ? 'lpeplain' : 'empty'}}`);
-  L.push(...(c.style === 'kyotsu' ? texCoverKyotsu(c, count, punct, top) : texCoverStandard(c, count, punct, top)));
+  L.push(...(c.style === 'kyotsu' ? texCoverKyotsu(c, count, punct, geo.top) : texCoverStandard(c, count, punct, geo)));
   // 次のページの番号: 表紙に番号を付けないなら 1 から。付けるなら続き（firstPage まで白紙を入れる）
   if (!c.pageNumber) L.push('\\newpage\\setcounter{page}{1}');
   else {
@@ -237,37 +240,61 @@ function texCover(c, count, punct = (t) => t, lay) {
   return L;
 }
 
-function texCoverStandard(c, count, punct, top) {
+/**
+ * 注意事項の番号・本文・折り返し・右端の位置（本文の左端から mm）。表紙の notesX / notesText / notesWrap / notesRight
+ * （用紙の左端から mm）を指定していればそれを使う
+ */
+export function coverNotesGeometry(c, left, textW) {
+  const rel = (v, d) => (Number(v) > 0 ? Number(v) - left : d);
+  const num = rel(c.notesX, 1.0);
+  const text = rel(c.notesText, num + 6.0);
+  const wrap = rel(c.notesWrap, text);
+  const right = Number(c.notesRight) > 0 ? Math.max(0, left + textW - Number(c.notesRight)) : 0;
+  return { num, text, wrap, right };
+}
+
+function texCoverStandard(c, count, punct, geo) {
   const L = [];
+  const { top } = geo;
   const P = coverPositions(c, top);
   // 表紙はテーマの行送り（本文用）を使わず、表紙専用の文字の大きさ・行送りで 1 ページに収める
   const pitch = Number(c.notesPitch) > 0 ? Number(c.notesPitch) : 6.0;
-  L.push(`\\begingroup\\fontsize{10.5pt}{${(pitch / (25.4 / 72.27)).toFixed(2)}pt}\\selectfont\\setlength{\\parskip}{0pt}\\setlength{\\parindent}{0pt}`);
-  const sfam = c.subjectFont === 'mincho' ? '\\rmfamily\\mcfamily' : gt;
+  const nsz = Number(c.notesSize) > 0 ? Number(c.notesSize) : 10.5;
+  L.push(`\\begingroup\\fontsize{${nsz}pt}{${(pitch / (25.4 / 72.27)).toFixed(2)}pt}\\selectfont\\setlength{\\parskip}{0pt}\\setlength{\\parindent}{0pt}`);
+  const fam = (f) => (f === 'mincho' ? '\\rmfamily\\mcfamily' : gt);
   const o = [];
   const headers = String(c.header || '').split('|').filter((s) => s.trim());
   headers.forEach((h, i) => {
-    const body = `{${gt}${fsz(Number(c.headerSize) || 15)} ${h.trim()}}`;
+    const body = `{${fam(c.headerFont)}${fsz(Number(c.headerSize) || 15)} ${h.trim()}}`;
     if (c.headerAlign === 'left') o.push(atL(P.header[i], top, 0, body));
     else if (c.headerAlign === 'right') o.push(`\\rlap{\\makebox[\\linewidth][r]{\\raisebox{${lower(P.header[i], top)}}[0pt][0pt]{${body}}}}`);
     else o.push(atC(P.header[i], top, body));
   });
   if (c.subject) {
-    const sub = c.subtitle ? `\\hspace{0.5\\zw}{${fsz(Math.max(10, Number(c.subjectSize) * 0.5))} ${c.subtitle}}` : '';
-    o.push(atC(P.subject, top, `{${sfam}${c.subjectBold ? '\\bfseries' : ''}${fsz(Number(c.subjectSize) || 34)} ${c.subject}}${sub}`));
+    const sub = c.subtitle ? `\\hspace{0.5\\zw}{${fsz(Math.max(10, Number(c.subjectSize) * 0.6))} ${c.subtitle}}` : '';
+    o.push(atC(P.subject, top, `{${fam(c.subjectFont)}${c.subjectBold ? '\\bfseries' : ''}${fsz(Number(c.subjectSize) || 34)} ${c.subject}${sub}}`));
   }
-  if (c.target) o.push(atC(P.target, top, `{${gt}${fsz(15)} ${c.target}}`));
-  if (c.points) o.push(atC(P.points, top, `{${fsz(12)} ${c.points}}`));
-  if (c.time) o.push(atC(P.time, top, `{${gt}${fsz(12)} ${c.timeLabel ? `${c.timeLabel}\\quad ` : ''}${c.time}}`));
+  if (c.target) o.push(atC(P.target, top, `{${gt}${fsz(Number(c.targetSize) || 15)} ${c.target}}`));
+  if (c.points) o.push(atC(P.points, top, `{${fsz(Number(c.pointsSize) || 12)} ${c.points}}`));
+  if (c.time) {
+    const body = `{${fam(c.timeFont)}${fsz(Number(c.timeSize) || 12)} ${c.timeLabel ? `${c.timeLabel}\\quad ` : ''}${c.time}}`;
+    if (c.timeAlign === 'left') o.push(atL(P.time, top, 0, body));
+    else if (c.timeAlign === 'right') o.push(`\\rlap{\\makebox[\\linewidth][r]{\\raisebox{${lower(P.time, top)}}[0pt][0pt]{${body}}}}`);
+    else o.push(atC(P.time, top, body));
+  }
   const items = coverNoteItems(c.notes, count);
-  const title = c.notesTitle ? `{${gt}\\bfseries ${c.notesTitle}}` : '';
-  if (title && !c.notesFrame) o.push(c.notesTitleAlign === 'center' ? atC(P.notes, top, title) : atL(P.notes, top, 0, title));
+  const tsz = Number(c.notesTitleSize) > 0 ? fsz(Number(c.notesTitleSize)) : '';
+  const title = c.notesTitle ? `{${gt}\\bfseries${tsz} ${c.notesTitle}}` : '';
+  const g = coverNotesGeometry(c, geo.left, geo.textW);
+  const tx = Number(c.notesTitleX) > 0 ? Number(c.notesTitleX) - geo.left : 0;
+  if (title && !c.notesFrame) o.push(c.notesTitleAlign === 'center' ? atC(P.notes, top, title) : atL(P.notes, top, tx.toFixed(2), title));
   L.push(`\\noindent${o.join('%\n')}\\par`);
   if (items.length || (title && c.notesFrame)) {
-    // 1 行目（高さ 0 の行）から注意事項の見出しのベースラインまで下げる
-    L.push(`\\vspace{\\dimexpr${P.notes.toFixed(2)}mm-${top}mm-\\topskip${c.notesFrame ? '-\\baselineskip' : ''}\\relax}`);
+    // 1 行目（高さ 0 の行）から注意事項の見出しのベースラインまで下げる（最初の項目は見出しの 1 行下）
+    const gap = c.notesGap != null && c.notesGap !== '' ? `+${Number(c.notesGap)}mm-\\baselineskip` : '';
+    L.push(`\\vspace{\\dimexpr${P.notes.toFixed(2)}mm-${top}mm-\\topskip${c.notesFrame ? '-\\baselineskip' : ''}${gap}\\relax}`);
     const num = COVER_NUMBERS[c.notesNumber] || COVER_NUMBERS.dot;
-    const list = texNoteList(items, punct, { label: num.tex, num: 1.0, text: 7.0, wrap: 7.0 });
+    const list = texNoteList(items, punct, { label: num.tex, ...g, itemGap: c.notesItemGap });
     if (c.notesFrame) {
       L.push('\\noindent\\setlength{\\fboxsep}{3mm}\\setlength{\\fboxrule}{0.35mm}\\fbox{\\begin{minipage}{\\dimexpr\\linewidth-2\\fboxsep-2\\fboxrule\\relax}');
       if (title) L.push(`{\\centering ${title}\\par}\\vspace{1mm}`);
@@ -279,7 +306,7 @@ function texCoverStandard(c, count, punct, top) {
   if (c.idField) {
     const labels = String(c.idLabels || '受験番号|氏　　名').split('|').filter(Boolean);
     L.push('\\begin{center}{\\renewcommand{\\arraystretch}{2.4}\\begin{tabular}{|c|p{62mm}|}\\hline');
-    for (const lab of labels) L.push(`\\makebox[18mm]{${lab.trim() === '受験番号' ? '受験番号' : lab.trim()}} & \\\\ \\hline`);
+    for (const lab of labels) L.push(`\\makebox[18mm]{${lab.trim()}} & \\\\ \\hline`);
     L.push('\\end{tabular}}\\end{center}');
     L.push('\\vspace{6mm}');
   }
