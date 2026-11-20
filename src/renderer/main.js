@@ -3,7 +3,7 @@ import './styles.css';
 import { MathfieldElement } from 'mathlive';
 import katex from 'katex';
 import { createEditor } from './lib/editor.js';
-import { renderLatex, renderSheet, renderSheetParts, joinSheet, renderInline, renderMath, collectMacros, contentStyle } from './lib/preview.js';
+import { renderLatex, renderSheet, renderSheetParts, renderInline, renderMath, collectMacros, contentStyle } from './lib/preview.js';
 import { buildTex, locateLine } from './lib/texExport.js';
 import { PALETTE } from './lib/palette.js';
 import { newDocument, newProblem, normalizeDoc } from './lib/model.js';
@@ -318,15 +318,37 @@ function patchItems(container, before, after, cls) {
   const nodes = container.children;
   for (let i = 0; i < after.length; i++) {
     if (after[i] === before[i]) continue;
+    if (nodes[i].classList.contains('sh-lazy')) continue; // まだ描いていない問題は、見えたときに最新の内容で描く
     const t = document.createElement('template');
     t.innerHTML = `<div class="${cls}" data-item="${i}">${after[i]}</div>`;
     nodes[i].replaceWith(t.content.firstChild);
   }
 }
 
+// 問題が多いと全部を一度に描くと数秒かかるので、先頭のいくつかだけ描き、残りは見えそうになったら描く
+const EAGER_ITEMS = 4;
+let lazyObserver = null;
+/** 描く前の問題の高さの見当（px）。スクロールバーの長さを大きく変えないため */
+function estimateHeight(html) {
+  const n = (re) => (html.match(re) || []).length;
+  return Math.min(6000, 60 + 28 * n(/class="pv-par/g) + 64 * n(/katex-display/g) + 28 * n(/<li/g) + 200 * n(/class="pv-fig/g));
+}
+function lazyItem(html, i, cls) {
+  return `<div class="${cls} sh-lazy" data-item="${i}" style="height:${estimateHeight(html)}px"></div>`;
+}
+function fillLazy(node) {
+  if (!node.classList.contains('sh-lazy') || !shownSheet) return;
+  const i = Number(node.dataset.item);
+  const html = node.classList.contains('sh-ans-item') ? shownSheet.answers[i] : shownSheet.items[i];
+  node.classList.remove('sh-lazy');
+  node.style.height = '';
+  node.innerHTML = html ?? '';
+}
+
 /**
  * プリント全体を描く。問題が数十題あると HTML が数 MB になり、作り直すたびに数秒止まるので、
  * 前回から変わった問題・解答だけを差し替える（全体の設定や問題の数が変わったときだけ作り直す）。
+ * 作り直すときも、見えていない問題は見えそうになってから描く。
  */
 function renderSheetPreview(el) {
   const parts = renderSheetParts(state.doc, state.macros, { interactive: true });
@@ -349,8 +371,30 @@ function renderSheetPreview(el) {
     if (ans) patchItems(ans, prev.answers, parts.answers, 'sh-item sh-ans-item');
     return;
   }
-  el.innerHTML = joinSheet(parts);
+  // 2 段組は段の高さを揃えるのに全部の高さが要るので、後回しにしない
+  const lazy = !parts.head.includes('cols-2');
+  const html =
+    parts.head +
+    parts.items.map((h, i) => (lazy && i >= EAGER_ITEMS ? lazyItem(h, i, 'sh-item') : `<div class="sh-item" data-item="${i}">${h}</div>`)).join('') +
+    parts.mid +
+    parts.answers.map((h, i) => (lazy ? lazyItem(h, i, 'sh-item sh-ans-item') : `<div class="sh-item sh-ans-item" data-item="${i}">${h}</div>`)).join('') +
+    parts.tail;
+  lazyObserver?.disconnect();
+  el.innerHTML = html;
   fitPages(el);
+  if (lazy) {
+    lazyObserver = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          lazyObserver.unobserve(e.target);
+          fillLazy(e.target);
+        }
+      },
+      { root: el, rootMargin: '1500px 0px' }
+    );
+    el.querySelectorAll('.sh-lazy').forEach((n) => lazyObserver.observe(n));
+  }
 }
 
 function renderPreview() {

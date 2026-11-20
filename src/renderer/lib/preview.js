@@ -40,14 +40,25 @@ export function collectMacros(preamble = '') {
   return macros;
 }
 
+// 組版した数式のキャッシュ（マクロの組ごと）。長い解答を編集しているとき、変わっていない数式は組み直さない
+const mathCache = new WeakMap();
 export function renderMath(latex, display, macros = {}) {
-  return katex.renderToString(normalizeNumbers(latex), {
-    displayMode: display,
-    throwOnError: false,
-    strict: 'ignore',
-    trust: false,
-    macros: { ...macros },
-  });
+  let cache = mathCache.get(macros);
+  if (!cache) mathCache.set(macros, (cache = new Map()));
+  const key = (display ? 'D' : 'I') + latex;
+  let html = cache.get(key);
+  if (html === undefined) {
+    html = katex.renderToString(normalizeNumbers(latex), {
+      displayMode: display,
+      throwOnError: false,
+      strict: 'ignore',
+      trust: false,
+      macros: { ...macros },
+    });
+    if (cache.size > 20000) cache.clear();
+    cache.set(key, html);
+  }
+  return html;
 }
 
 const SIZE_EM = { tiny: 0.5, scriptsize: 0.7, footnotesize: 0.8, small: 0.9, large: 1.2, Large: 1.44, LARGE: 1.73, huge: 2.07 };
@@ -180,7 +191,8 @@ function textToHtml(s) {
         html += p.slice(sc[0].length);
         continue;
       }
-      html += p;
+      // リストの中の空行は、項目の中の段落の区切りにする（後で段落に分けるときにリストを切らないように）
+      html += stack.length ? p.replace(/\n[ \t]*\n+/g, '<div class="pv-ibreak"></div>') : p;
     }
   }
   while (stack.length) {
