@@ -6,6 +6,7 @@
 #   macOS  : CSC_LINK, CSC_KEY_PASSWORD（Developer ID Application 証明書）
 #            APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID（公証）
 #   Windows: ES_USERNAME, ES_PASSWORD, ES_TOTP_SECRET, ES_CREDENTIAL_ID（SSL.com eSigner）
+# 自動更新: latest.yml（Windows）・latest-mac.yml（macOS）と .blockmap も Release に添付する（electron/updater.js が読む）。
 name: build
 
 on:
@@ -132,6 +133,11 @@ jobs:
             if ($s.Status -ne 'Valid') { throw "署名されていません: $f" }
           }
 
+      # 署名でインストーラーの中身が変わったので、自動更新の情報（latest.yml）のハッシュを付け直す
+      - name: 自動更新の情報を付け直す（Windows）
+        if: runner.os == 'Windows' && env.WIN_SIGN == 'true'
+        run: node scripts/refresh-update-info.mjs release
+
       - name: 署名の確認（macOS）
         if: runner.os == 'macOS' && env.MAC_SIGN == 'true'
         run: |
@@ -148,14 +154,19 @@ jobs:
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
 
       - name: Release に添付
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          # latest.yml / latest-mac.yml と .blockmap は自動更新に使う
           files: |
             release/*.exe
             release/*.dmg
             release/*.zip
+            release/*.blockmap
+            release/latest*.yml
           generate_release_notes: true
