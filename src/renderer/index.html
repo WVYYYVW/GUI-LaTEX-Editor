@@ -43,6 +43,7 @@
         <aside class="sidebar">
           <div class="sb-head">
             <input id="filter" type="search" placeholder="検索（タイトル・タグ・本文）" />
+            <button data-action="problem-table" class="ghost" title="問題の一覧表：難易度・タグ・小問の数・配点などを表で見る (Ctrl/⌘+Shift+T)">表</button>
           </div>
           <ol id="problem-list" class="problem-list"></ol>
           <div class="sb-actions">
@@ -93,6 +94,7 @@
               <div class="write-bar" id="write-bar">
                 <button data-write="sub" title="小問の番号「(1) 」を入れます。番号の形はレイアウトに合わせて付きます（Enter で次の番号）">小問 (1)</button>
                 <button data-write="math" title="数式を入れます（数式エディタ）">数式</button>
+                <button data-write="graph" title="関数のグラフ・図形・画像を入れます（式を入れるだけでグラフになります）">グラフ・図</button>
                 <button data-write="natural" class="hidden" title="\begin{enumerate} と \item で書かれた小問を、「(1) 」で始まる行の書き方に直します（見た目は変わりません）">(1) の書き方に直す</button>
               </div>
               <div class="fmt-bar" id="fmt-bar" title="選択した文字に書式を付けます">
@@ -546,6 +548,20 @@
           <button type="submit" class="primary">OK</button>
         </div>
       </form>
+    </div>
+
+    <!-- 問題の一覧表 -->
+    <div id="table-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pt-title">
+      <div class="modal table-modal">
+        <div class="pt-head">
+          <h2 id="pt-title">問題の一覧表</h2>
+          <span id="pt-summary" class="hint"></span>
+          <span class="tb-spacer"></span>
+          <button id="pt-close" type="button">閉じる</button>
+        </div>
+        <p class="hint">見出しをクリックすると並べ替えます。行をクリックするとその問題を開きます。難易度の ★ はここでも変えられます。</p>
+        <div class="pt-wrap"><table class="pt-table" id="pt-table"></table></div>
+      </div>
     </div>
 
     <div id="busy" class="overlay hidden"><div class="busy-box"><div class="spinner"></div><span id="busy-text">処理中…</span></div></div>

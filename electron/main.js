@@ -124,6 +124,7 @@ function buildMenu() {
       submenu: [
         { label: '問題の一覧を表示・隠す', accelerator: 'CmdOrCtrl+Shift+L', click: () => send('toggle-list') },
         { label: 'プレビューを表示・隠す', accelerator: 'CmdOrCtrl+Shift+P', click: () => send('toggle-preview') },
+        { label: '問題の一覧表…', accelerator: 'CmdOrCtrl+Shift+T', click: () => send('problem-table') },
         { type: 'separator' },
         { role: 'resetZoom', label: '実際のサイズ' },
         { role: 'zoomIn', label: '拡大' },

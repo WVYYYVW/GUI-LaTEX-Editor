@@ -98,6 +98,24 @@ export function naturalToLatex(src) {
 }
 
 /**
+ * 問題文から、一覧に出す短い要約を作る（題名が無いとき用）。
+ * \begin{enumerate} のような環境の目印・\item・レイアウト用の命令・コメント・図は取り除き、
+ * \textbf{…} などの中身の文字と数式の中身は残す。
+ */
+export function plainSummary(src, max = 40) {
+  let s = String(src || '');
+  s = s.replace(/% @fig [\s\S]*?% @endfig/g, ' '); // 図
+  s = s.replace(/(^|[^\\])%.*$/gm, '$1'); // コメント
+  s = s.replace(/\\(begin|end)\s*\{[^{}]*\}(\s*\[[^\]]*\])?(\s*\{[^{}]*\})?/g, ' '); // 環境の目印（表の列指定も）
+  s = s.replace(/\\(item|Part)(?![a-zA-Z])(\s*\[[^\]]*\])?/g, ' ');
+  s = s.replace(/\\(label|ref|eqref|vspace|hspace|setcounter|addtocounter|includegraphics|setlength)\*?(\s*\[[^\]]*\])?(\s*\{[^{}]*\})+/g, ' ');
+  s = s.replace(/\\blank\s*\{([^{}]*)\}/g, '（$1）');
+  s = s.replace(/\\[a-zA-Z]+\*?/g, ' ').replace(/\\./g, ' ');
+  s = s.replace(/[{}$[\]&]/g, ' ').replace(/\s+/g, ' ').trim();
+  return s.slice(0, max);
+}
+
+/**
  * 単純な \begin{enumerate} … \end{enumerate}（入れ子・オプション・\item[…] なし）を「(1) …」の書き方に直す。
  * 直せないまとまりはそのまま残す。
  */

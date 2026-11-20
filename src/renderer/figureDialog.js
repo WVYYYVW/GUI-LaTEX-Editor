@@ -1,5 +1,5 @@
 // 「図・グラフ」ダイアログ：関数グラフ / 図形（作図）/ 画像
-import { defaultGraph, defaultGeo, defaultImage, figureToSvg, figureErrors, geoBounds, PARTS } from './lib/figure.js';
+import { defaultGraph, defaultGeo, defaultImage, figureToSvg, figureErrors, geoBounds, PARTS, autoYRange, graphKeyPoints, autoRange } from './lib/figure.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
@@ -74,7 +74,7 @@ export function initFigureDialog(deps) {
         ${g.functions
           .map(
             (f, i) => `<div class="fig-fn">
-              <span class="fig-y">y =</span><input data-fn="${i}" data-k="expr" value="${esc(f.expr)}" placeholder="例: x^2-2x+1, sin(x), 1/x" spellcheck="false">
+              <span class="fig-y">y =</span><input data-fn="${i}" data-k="expr" value="${esc(f.expr)}" placeholder="例: x^2-2x+1, sin(x), 1/x（縦の直線は x=2）" spellcheck="false">
               <button data-del-fn="${i}" class="ghost" title="削除">×</button>
               <div class="fig-sub">
                 <label>範囲 <input data-fn="${i}" data-k="from" value="${esc(f.from)}" placeholder="左端" class="num"> 〜 <input data-fn="${i}" data-k="to" value="${esc(f.to)}" placeholder="右端" class="num"></label>
@@ -86,7 +86,14 @@ export function initFigureDialog(deps) {
           .join('')}
         <div class="fig-quick">${QUICK.map(([e, n]) => `<button data-quick="${esc(e)}" title="${esc(e)}">${n}</button>`).join('')}</div>
         <button data-add-fn class="ghost">＋ 関数を追加</button>
-        <p class="hint">書き方: <code>x^2</code>（累乗）, <code>2x</code>（掛け算は省略可）, <code>sqrt(x)</code>, <code>sin(x)</code>, <code>log(x)</code>（自然対数）, <code>e^x</code>, <code>|x|</code>, <code>pi</code></p>
+        <p class="hint">書き方: <code>x^2</code>（累乗）, <code>2x</code>（掛け算は省略可）, <code>sqrt(x)</code>, <code>sin(x)</code>, <code>log(x)</code>（自然対数）, <code>e^x</code>, <code>|x|</code>, <code>pi</code>。縦の直線は <code>x=2</code>（範囲は y の範囲になります）</p>
+      </section>
+      <section><h3>おまかせ</h3>
+        <div class="ld-row">
+          <button data-auto-range type="button" title="切片・極値・交点が収まり、グラフの形が見えるように表示範囲を合わせます">範囲を自動で合わせる</button>
+          <button data-key-points type="button" title="y 切片・x 切片・極大・極小・2 つのグラフの交点に、座標の付いた点を打ちます">要点を打つ（切片・極値・交点）</button>
+        </div>
+        <p class="hint">要点の名前（座標）は下の「点」で書き換えられます。小数になる値は小数第 2 位まで出すので、√ などで書きたいときは書き換えてください。</p>
       </section>
       <section><h3>表示範囲と目盛り</h3>
         <div class="fig-range">
@@ -233,6 +240,12 @@ export function initFigureDialog(deps) {
     const d = b.dataset;
     if (d.delFn !== undefined) spec.functions.splice(Number(d.delFn), 1);
     else if ('addFn' in d) spec.functions.push({ expr: '', from: '', to: '', dashed: false, label: '' });
+    else if ('autoRange' in d) Object.assign(spec, autoRange(spec));
+    else if ('keyPoints' in d) {
+      const pts = graphKeyPoints(spec);
+      spec.points.push(...pts.map(({ x, y, label, pos, drop }) => ({ x, y, label, pos, drop })));
+      deps.toast(pts.length ? `${pts.length} 個の点を打ちました（名前は「点」で書き換えられます）` : '新しく打つ要点はありませんでした', 'info', 3500);
+    }
     else if (d.quick !== undefined) {
       const empty = spec.functions.find((f) => !f.expr.trim());
       if (empty) empty.expr = d.quick;

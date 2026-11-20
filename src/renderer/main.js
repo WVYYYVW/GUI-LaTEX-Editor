@@ -7,9 +7,10 @@ import { renderLatex, renderSheet, renderSheetParts, renderInline, renderMath, c
 import { buildTex, locateLine } from './lib/texExport.js';
 import { PALETTE } from './lib/palette.js';
 import { newDocument, newProblem, normalizeDoc } from './lib/model.js';
+import { suggestTitle } from './lib/autoTitle.js';
 import { findMathRanges, rangeAt, normalizeMathText } from './lib/mathRanges.js';
 import { clipboardToLatex, aiTextToLatex, htmlHasTex } from './lib/smartPaste.js';
-import { latexToNatural } from './lib/natural.js';
+import { latexToNatural, plainSummary, naturalToLatex } from './lib/natural.js';
 import { buildAiPrompt, splitAiProblems, parseMathprobText } from './lib/aiPrompt.js';
 import { latexToMathML } from './lib/wordExport.js';
 import { initLayoutPanel, fitPages, enableSpaceDrag } from './layoutPanel.js';
@@ -94,6 +95,7 @@ const editor = createEditor($('#cm-host'), {
     schedulePreview();
     scheduleListRefresh();
     scheduleWriteBar();
+    if (state.field === 'body') scheduleAutoTitle();
   },
   getAutoHalfwidth: () => state.settings.autoHalfwidth !== false,
   keys: [
@@ -133,8 +135,7 @@ const scheduleListRefresh = () => {
 
 function summary(p) {
   if (p.title) return p.title;
-  const s = p.body.replace(/\\[a-zA-Z]+\*?/g, ' ').replace(/[{}$\\\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-  return s.slice(0, 40) || '（未入力）';
+  return plainSummary(p.body, 40) || '（未入力）';
 }
 
 function matchesFilter(p) {
@@ -232,7 +233,7 @@ function selectProblem(id, field = state.field) {
   $('#empty-state').classList.toggle('hidden', !!p);
   $('#editor-area').classList.toggle('hidden', !p);
   if (p) {
-    $('#p-title').value = p.title;
+    showTitleField(p);
     $('#p-tags').value = p.tags.join(', ');
     renderStars(p.difficulty);
     syncProblemLayout();
@@ -277,10 +278,49 @@ $('#pl-space').addEventListener('input', (e) => {
   updateProblemLayout({ answerSpace: v === '' ? null : Math.max(0, Number(v) || 0) });
 });
 
+// ---------------- 題名の自動設定 ----------------
+/** 題名が空、または自動で付けた題名なら、問題文から付け直す。変わったら true */
+function refreshAutoTitle(p) {
+  if (!p || (p.title.trim() && !p.titleAuto)) return false;
+  const t = suggestTitle(p.body, state.doc.meta.subject);
+  if (t === p.title) return false;
+  p.title = t;
+  p.titleAuto = !!t;
+  return true;
+}
+function showTitleField(p) {
+  const el = $('#p-title');
+  if (document.activeElement !== el) el.value = p?.title ?? '';
+  el.classList.toggle('auto', !!p?.titleAuto);
+  el.title = p?.titleAuto ? '問題文から自動で付けた題名です（書き換えると、自動では変わらなくなります。空にすると自動に戻ります）' : '';
+}
+let autoTitleTimer;
+function scheduleAutoTitle() {
+  clearTimeout(autoTitleTimer);
+  autoTitleTimer = setTimeout(() => {
+    const p = currentProblem();
+    if (refreshAutoTitle(p)) {
+      showTitleField(p);
+      scheduleListRefresh();
+      schedulePreview();
+    }
+  }, 600);
+}
+$('#p-title').addEventListener('change', () => {
+  // 空にして欄を離れたら、自動の題名に戻す
+  const p = currentProblem();
+  if (p && !p.title.trim() && refreshAutoTitle(p)) {
+    showTitleField(p);
+    scheduleListRefresh();
+    schedulePreview();
+  }
+});
 $('#p-title').addEventListener('input', (e) => {
   const p = currentProblem();
   if (!p) return;
   p.title = e.target.value;
+  p.titleAuto = !p.title.trim(); // 自分で書いたら自動で変えない
+  showTitleField(p);
   setDirty(true);
   scheduleListRefresh();
   schedulePreview();
@@ -573,6 +613,7 @@ $('#write-bar').addEventListener('click', (e) => {
   if (!b || !currentProblem()) return;
   if (b.dataset.write === 'sub') editor.insertSubQuestion();
   else if (b.dataset.write === 'math') openMathEditor();
+  else if (b.dataset.write === 'graph') openFigure();
   else if (b.dataset.write === 'natural') {
     const t = editor.getText();
     const n = latexToNatural(t);
@@ -930,13 +971,18 @@ $('#pd-ok').addEventListener('click', () => {
       const p = list[0];
       cur.body = p.body;
       cur.solution = p.solution;
-      if (p.title) cur.title = p.title;
+      if (p.title) {
+        cur.title = p.title;
+        cur.titleAuto = false;
+      }
       Object.assign(cur, extra(p));
+      refreshAutoTitle(cur);
       first = 1;
     }
     let lastId = cur?.id ?? null;
     for (const p of list.slice(first)) {
       const np = newProblem({ title: p.title, body: p.body, solution: p.solution, ...extra(p) });
+      refreshAutoTitle(np);
       state.doc.problems.splice(++at, 0, np);
       lastId = np.id;
     }
@@ -953,6 +999,7 @@ $('#pd-ok').addEventListener('click', () => {
   if (!latex.trim()) return;
   if (target === 'new' || !currentProblem()) {
     const p = newProblem({ body: latex });
+    refreshAutoTitle(p);
     state.doc.problems.splice(currentIndex() + 1, 0, p);
     setDirty(true);
     renderList();
@@ -1415,6 +1462,7 @@ const actions = {
   'move-up': () => currentProblem() && moveProblem(state.selectedId, currentIndex() - 1),
   'move-down': () => currentProblem() && currentIndex() < state.doc.problems.length - 1 && moveProblem(state.selectedId, currentIndex() + 1),
   'math-editor': () => openMathEditor(),
+  'problem-table': () => openProblemTable(),
   'toggle-list': () => setPaneVisible('list', $('.workspace').classList.contains('hide-list')),
   'toggle-preview': () => setPaneVisible('preview', $('.workspace').classList.contains('hide-preview')),
   'smart-paste': () => openPasteDialog(),
@@ -1425,6 +1473,130 @@ const actions = {
 };
 
 api.onMenu((action, payload) => actions[action]?.(payload));
+
+// ---------------- 問題の一覧表 ----------------
+let ptSort = { key: 'index', dir: 1 };
+const PT_COLUMNS = [
+  ['index', '番号', 'num'],
+  ['title', '題名', 'text'],
+  ['difficulty', '難易度', 'num'],
+  ['tags', 'タグ', 'text'],
+  ['subs', '小問', 'num'],
+  ['bodyChars', '問題文', 'num'],
+  ['solChars', '解答', 'num'],
+  ['points', '配点', 'num'],
+  ['figs', '図', 'num'],
+  ['place', '配置', 'text'],
+];
+/** 一覧表の 1 行分の情報 */
+function problemInfo(p, i) {
+  const lay = p.layout || {};
+  const place = [lay.pageBreakBefore ? '前で改ページ' : '', lay.frame === true ? '枠' : lay.frame === false ? '枠なし' : '', lay.answerSpace != null ? `解答欄 ${lay.answerSpace}mm` : '']
+    .filter(Boolean)
+    .join('・');
+  return {
+    p,
+    index: i + 1,
+    title: p.title || plainSummary(p.body, 30) || '（未入力）',
+    difficulty: p.difficulty || 0,
+    tags: p.tags.join(', '),
+    subs: (naturalToLatex(p.body).match(/\\item(?![a-zA-Z])/g) || []).length,
+    bodyChars: plainSummary(p.body, 1e9).length,
+    solChars: plainSummary(p.solution, 1e9).length,
+    points: p.points ?? null,
+    figs: (p.body.match(/% @fig |\\includegraphics|\\begin\{tikzpicture\}/g) || []).length,
+    place,
+  };
+}
+function renderProblemTable() {
+  const rows = state.doc.problems.map(problemInfo);
+  const { key, dir } = ptSort;
+  const kind = PT_COLUMNS.find((c) => c[0] === key)?.[2];
+  rows.sort((a, b) => {
+    const x = a[key];
+    const y = b[key];
+    if (x == null && y == null) return a.index - b.index;
+    if (x == null) return 1; // 空は常に後ろ
+    if (y == null) return -1;
+    const c = kind === 'num' ? x - y : String(x).localeCompare(String(y), 'ja');
+    return c * dir || a.index - b.index;
+  });
+  const t = $('#pt-table');
+  t.innerHTML = '';
+  const head = document.createElement('tr');
+  for (const [k, label] of PT_COLUMNS) {
+    const th = document.createElement('th');
+    th.textContent = label + (k === key ? (dir > 0 ? ' ▲' : ' ▼') : '');
+    th.className = `pt-${k}`;
+    th.addEventListener('click', () => {
+      ptSort = { key: k, dir: k === key ? -dir : 1 };
+      renderProblemTable();
+    });
+    head.append(th);
+  }
+  const thead = document.createElement('thead');
+  thead.append(head);
+  const tbody = document.createElement('tbody');
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    tr.classList.toggle('selected', r.p.id === state.selectedId);
+    for (const [k] of PT_COLUMNS) {
+      const td = document.createElement('td');
+      td.className = `pt-${k}`;
+      if (k === 'difficulty') {
+        for (let s = 1; s <= 5; s++) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = `pt-star${s <= r.difficulty ? ' on' : ''}`;
+          b.textContent = s <= r.difficulty ? '★' : '☆';
+          b.title = `難易度 ${s}`;
+          b.addEventListener('click', (e) => {
+            e.stopPropagation();
+            r.p.difficulty = r.p.difficulty === s ? 0 : s;
+            setDirty(true);
+            renderList();
+            if (r.p.id === state.selectedId) renderStars(r.p.difficulty);
+            renderPreview();
+            renderProblemTable();
+          });
+          td.append(b);
+        }
+      } else if (k === 'tags') {
+        for (const tag of r.p.tags) td.append(Object.assign(document.createElement('span'), { className: 'chip', textContent: tag }));
+      } else if (k === 'points') td.textContent = r.points == null ? '—' : `${r.points} 点`;
+      else if (k === 'solChars') td.textContent = r.solChars ? `${r.solChars} 字` : 'なし';
+      else if (k === 'bodyChars') td.textContent = `${r.bodyChars} 字`;
+      else if (k === 'subs' || k === 'figs') td.textContent = r[k] ? String(r[k]) : '—';
+      else td.textContent = String(r[k] ?? '');
+      if (k === 'title' && r.p.titleAuto) td.title = '問題文から自動で付けた題名';
+      tr.append(td);
+    }
+    tr.addEventListener('click', () => {
+      closeProblemTable();
+      selectProblem(r.p.id, 'body');
+      editor.focus();
+    });
+    tbody.append(tr);
+  }
+  t.append(thead, tbody);
+  // 合計
+  const ps = state.doc.problems;
+  const pts = ps.reduce((s, p) => s + (Number(p.points) || 0), 0);
+  const rated = ps.filter((p) => p.difficulty > 0);
+  const avg = rated.length ? (rated.reduce((s, p) => s + p.difficulty, 0) / rated.length).toFixed(1) : '—';
+  $('#pt-summary').textContent = `全 ${ps.length} 題・小問 ${rows.reduce((s, r) => s + r.subs, 0)} 個・解答あり ${ps.filter((p) => p.solution.trim()).length} 題・平均難易度 ${avg}${pts ? `・配点合計 ${pts} 点` : ''}`;
+}
+function openProblemTable() {
+  renderProblemTable();
+  $('#table-dialog').classList.remove('hidden');
+  $('#pt-table tr.selected')?.scrollIntoView({ block: 'nearest' });
+}
+function closeProblemTable() {
+  $('#table-dialog').classList.add('hidden');
+}
+$('#pt-close').addEventListener('click', closeProblemTable);
+$('#table-dialog').addEventListener('keydown', (e) => e.key === 'Escape' && closeProblemTable());
+$('#table-dialog').addEventListener('click', (e) => e.target === $('#table-dialog') && closeProblemTable());
 
 // ---------------- 一覧・プレビューの表示 ----------------
 // 隠すとエディタを広く使える。次に起動したときも同じにする（この PC の中だけに覚える）

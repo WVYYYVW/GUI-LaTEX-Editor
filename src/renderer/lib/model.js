@@ -1,5 +1,6 @@
-// 問題集ファイル（.mathprob = JSON）のデータモデル
+// 問題集ファイル（.mpb = JSON。以前の .mathprob も同じ形）のデータモデル
 import { defaultLayout, normalizeLayout, defaultProblemLayout } from './layout.js';
+import { suggestTitle } from './autoTitle.js';
 
 export const FORMAT_VERSION = 1;
 
@@ -102,6 +103,12 @@ export function normalizeDoc(data) {
       layout: { ...defaultProblemLayout(), ...(p.layout || {}) },
       points: p.points == null || p.points === '' ? null : Number(p.points),
     });
+    // 題名が空なら問題文から付ける（titleAuto: 自動で付けた題名。問題文を直すと付け直す。自分で書いたら外れる）
+    if (p.titleAuto && q.title) q.titleAuto = true;
+    if (!q.title.trim() && q.body.trim()) {
+      q.title = suggestTitle(q.body, meta.subject);
+      q.titleAuto = true;
+    }
     if (p.id && !seen.has(p.id)) q.id = String(p.id);
     seen.add(q.id);
     return q;

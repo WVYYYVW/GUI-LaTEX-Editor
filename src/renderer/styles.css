@@ -122,6 +122,28 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--panel-2); bor
 .pm-diff { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; white-space: nowrap; }
 .pm-diff .stars { display: flex; flex-wrap: nowrap; }
 .problem-meta input { min-width: 0; width: 100%; }
+/* 問題文から自動で付けた題名（書き換えると普通の表示に戻る） */
+#p-title.auto { color: var(--muted); }
+/* 問題の一覧表 */
+.sb-head { display: flex; gap: 6px; align-items: center; }
+.sb-head #filter { flex: 1; min-width: 0; }
+.sb-head button { flex: none; padding: 4px 10px; }
+.table-modal { width: min(1180px, 96vw); display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
+.pt-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.pt-head h2 { margin: 0; }
+.pt-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.pt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pt-table th { position: sticky; top: 0; background: var(--panel-2, var(--panel)); text-align: left; padding: 6px 8px; cursor: pointer; white-space: nowrap; border-bottom: 1px solid var(--border); user-select: none; z-index: 1; }
+.pt-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.pt-table tbody tr { cursor: pointer; }
+.pt-table tbody tr:hover { background: var(--accent-soft); }
+.pt-table tbody tr.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pt-table .pt-index, .pt-table .pt-subs, .pt-table .pt-bodyChars, .pt-table .pt-solChars, .pt-table .pt-points, .pt-table .pt-figs { text-align: right; white-space: nowrap; }
+.pt-table td.pt-title { min-width: 12em; }
+.pt-table td.pt-difficulty { white-space: nowrap; }
+.pt-star { border: none; background: none; padding: 0 1px; font-size: 15px; color: var(--border); cursor: pointer; }
+.pt-star.on { color: #e3a008; }
+.pt-table td.pt-tags .chip { margin-right: 4px; }
 .stars button { border: none; background: none; padding: 0 1px; font-size: 18px; color: var(--border); }
 .stars button.on { color: #e3a008; }
 .field-tabs, .preview-tabs { display: flex; align-items: center; gap: 4px; padding: 6px 10px 0; background: var(--panel); border-bottom: 1px solid var(--border); }

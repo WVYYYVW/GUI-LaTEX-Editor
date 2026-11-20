@@ -194,11 +194,34 @@ export function sampleFunction(fn, a, b, ymin, ymax, n = 360) {
   return segs;
 }
 
+/**
+ * 関数の欄の書き方を読む。「y = …」の y= は省いてよい。「x = 2」は縦の直線
+ * @returns {{kind:'fn', expr:string} | {kind:'vline', x:number} | null}
+ */
+export function readGraphExpr(src) {
+  const s = String(src || '').trim().replace(/^[yｙ]\s*[=＝]\s*/, '');
+  if (!s) return null;
+  const v = s.match(/^[xｘ]\s*[=＝]\s*(.+)$/);
+  if (v) {
+    const x = compileExpr(v[1])(0);
+    if (!Number.isFinite(x)) throw new Error('x = の右側は数にしてください');
+    return { kind: 'vline', x };
+  }
+  return { kind: 'fn', expr: s };
+}
+
 function graphCurves(g) {
   return g.functions.map((f) => {
     if (!f.expr.trim()) return { segs: [], f };
     try {
-      const fn = compileExpr(f.expr);
+      const r = readGraphExpr(f.expr);
+      if (r.kind === 'vline') {
+        // 縦の直線 x = a（範囲を書けば y の範囲として使う）
+        const lo = f.from !== '' && f.from != null ? Number(f.from) : g.ymin;
+        const hi = f.to !== '' && f.to != null ? Number(f.to) : g.ymax;
+        return { segs: [[[r3(r.x), r3(lo)], [r3(r.x), r3(hi)]]], f, vline: r.x };
+      }
+      const fn = compileExpr(r.expr);
       const a = f.from !== '' && f.from != null ? Number(f.from) : g.xmin;
       const b = f.to !== '' && f.to != null ? Number(f.to) : g.xmax;
       return { segs: sampleFunction(fn, a, b, g.ymin, g.ymax), f, fn };
@@ -224,6 +247,233 @@ function labelPoint(g, segs) {
 export function figureErrors(spec) {
   if (spec.type !== 'graph') return [];
   return graphCurves(spec).map((c, i) => (c.error ? `関数 ${i + 1}: ${c.error}` : null)).filter(Boolean);
+}
+
+// ---------------- グラフの補助（範囲を自動・要点を打つ） ----------------
+/** 関数ごとの x の範囲 */
+function fnDomain(g, f) {
+  const a = f.from !== '' && f.from != null ? Number(f.from) : g.xmin;
+  const b = f.to !== '' && f.to != null ? Number(f.to) : g.xmax;
+  return [Math.max(a, g.xmin), Math.min(b, g.xmax)];
+}
+function compiledFns(g) {
+  return g.functions
+    .map((f, i) => {
+      try {
+        const r = readGraphExpr(f.expr);
+        if (!r || r.kind !== 'fn') return null;
+        return { i, f, fn: compileExpr(r.expr), dom: fnDomain(g, f) };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+const safe = (fn, x) => {
+  try {
+    const y = fn(x);
+    return Number.isFinite(y) ? y : NaN;
+  } catch {
+    return NaN;
+  }
+};
+
+/**
+ * 表示する y の範囲を、関数の形に合わせて決める（x の範囲はそのまま）。
+ * 漸近線などで大きく外れる値は外して、全体の形が見えるようにする。
+ * @returns {{ymin:number, ymax:number}}
+ */
+export function autoYRange(g) {
+  const ys = [];
+  for (const { fn, dom } of compiledFns(g)) {
+    for (let k = 0; k <= 400; k++) {
+      const y = safe(fn, dom[0] + ((dom[1] - dom[0]) * k) / 400);
+      if (!Number.isNaN(y)) ys.push(y);
+    }
+  }
+  for (const p of g.points || []) ys.push(p.y);
+  if (!ys.length) return { ymin: g.ymin, ymax: g.ymax };
+  ys.sort((a, b) => a - b);
+  // 両端の 3% は外す（1/x などの漸近線で範囲が広がりすぎないように）
+  const lo = ys[Math.floor(ys.length * 0.03)];
+  const hi = ys[Math.ceil(ys.length * 0.97) - 1];
+  const pad = Math.max(0.5, (hi - lo) * 0.1);
+  let ymin = Math.floor(Math.min(lo - pad, 0 - 0.5)); // x 軸が見えるように 0 を含める
+  let ymax = Math.ceil(Math.max(hi + pad, 0 + 0.5));
+  if (ymax - ymin < 2) ymax = ymin + 2;
+  return { ymin, ymax };
+}
+
+/**
+ * 表示範囲をおまかせで決める。x は切片・極値・交点・縦の直線・点が収まるように（無ければ今のまま）、
+ * y はその範囲での関数の形に合わせる。
+ * @returns {{xmin:number, xmax:number, ymin:number, ymax:number}}
+ */
+export function autoRange(g) {
+  const wide = { ...g, ymin: -1e6, ymax: 1e6, points: [] };
+  const kps = graphKeyPoints(wide);
+  const xs = kps.map((p) => p.x);
+  for (const f of g.functions) {
+    try {
+      const r = readGraphExpr(f.expr);
+      if (r?.kind === 'vline') xs.push(r.x);
+    } catch {
+      /* 書きかけ */
+    }
+  }
+  for (const p of g.points || []) xs.push(p.x);
+  let { xmin, xmax } = g;
+  if (xs.length) {
+    const lo = Math.min(...xs);
+    const hi = Math.max(...xs);
+    const span = Math.max(hi - lo, 4);
+    xmin = Math.floor(lo - span * 0.35);
+    xmax = Math.ceil(hi + span * 0.35);
+    // y 軸が近ければ、端にくっつかないよう少し内側に入れる
+    if (xmin >= 0 && xmin < span) xmin = -1;
+    if (xmax <= 0 && -xmax < span) xmax = 1;
+  }
+  // y: 極値・交点・切片があればそれを中心に（3 次関数などで端の値に引っ張られて平たくならないように）
+  const ys = kps.filter((p) => p.x >= xmin && p.x <= xmax).map((p) => p.y);
+  for (const p of g.points || []) ys.push(p.y);
+  if (ys.length >= 2 || kps.some((p) => p.kind === 'max' || p.kind === 'min')) {
+    ys.push(0); // x 軸
+    const lo = Math.min(...ys);
+    const hi = Math.max(...ys);
+    const pad = Math.max(1.5, (hi - lo) * 0.6);
+    return { xmin, xmax, ymin: Math.floor(lo - pad), ymax: Math.ceil(hi + pad) };
+  }
+  return { xmin, xmax, ...autoYRange({ ...g, xmin, xmax }) };
+}
+
+/** 値を見やすく: 整数・1/2・1/3・1/4 の倍数ならその分数、ほかは小数第 2 位まで（LaTeX） */
+export function niceNumber(v) {
+  const r = Math.round(v);
+  if (Math.abs(v - r) < 1e-6) return String(r === 0 ? 0 : r);
+  for (const d of [2, 3, 4]) {
+    const n = Math.round(v * d);
+    if (Math.abs(v * d - n) < 1e-6) return `${n < 0 ? '-' : ''}\\frac{${Math.abs(n)}}{${d}}`;
+  }
+  return String(Math.round(v * 100) / 100);
+}
+const snap = (v) => {
+  for (const d of [1, 2, 3, 4]) {
+    const n = Math.round(v * d);
+    if (Math.abs(v * d - n) < 1e-6) return n / d;
+  }
+  return v;
+};
+/** 区間 [a, b] で符号が変わる h の零点を二分法で */
+function bisect(h, a, b) {
+  let fa = h(a);
+  for (let k = 0; k < 80; k++) {
+    const m = (a + b) / 2;
+    const fm = h(m);
+    if (Number.isNaN(fm)) return null;
+    if (fm === 0) return m;
+    if (fa * fm < 0) b = m;
+    else {
+      a = m;
+      fa = fm;
+    }
+  }
+  return (a + b) / 2;
+}
+/** h の零点（符号の変わる所と、0 に接する所） */
+function zerosOf(h, a, b, n = 1200) {
+  const out = [];
+  let px = a;
+  let py = h(a);
+  for (let k = 1; k <= n; k++) {
+    const x = a + ((b - a) * k) / n;
+    const y = h(x);
+    if (!Number.isNaN(py) && !Number.isNaN(y)) {
+      if (py === 0) out.push(px);
+      else if (py * y < 0 && Math.abs(py - y) < 1e6) {
+        const z = bisect(h, px, x);
+        // 漸近線（1/x の x=0 など）での符号の変化は零点ではない
+        if (z != null && Math.abs(h(z)) < 1e-6) out.push(z);
+      }
+    }
+    px = x;
+    py = y;
+  }
+  return out;
+}
+
+/**
+ * 関数の要点（y 切片・x 切片・極大・極小・2 つの関数の交点）を点として返す
+ * @returns {{x:number, y:number, label:string, pos:string, drop:boolean, kind:string}[]}
+ */
+export function graphKeyPoints(g) {
+  const fns = compiledFns(g);
+  const out = [];
+  const add = (x, y, kind) => {
+    x = snap(x);
+    y = snap(y);
+    if (!(x >= g.xmin - 1e-9 && x <= g.xmax + 1e-9 && y >= g.ymin - 1e-9 && y <= g.ymax + 1e-9)) return;
+    if (out.some((p) => Math.hypot(p.x - x, p.y - y) < 1e-4)) return;
+    if ((g.points || []).some((p) => Math.hypot(p.x - x, p.y - y) < 1e-4)) return;
+    const onAxisX = Math.abs(y) < 1e-9;
+    const onAxisY = Math.abs(x) < 1e-9;
+    let label;
+    let pos;
+    if (onAxisX && onAxisY) return; // 原点は「O」で示す
+    // 軸上の点: 整数で目盛りの数字があれば名前は付けない（目盛りと重なるので）。ほかは軸の上側に
+    const tickShows = (v) => g.ticks && Math.abs(v - Math.round(v)) < 1e-9;
+    if (onAxisX) [label, pos] = [tickShows(x) ? '' : `$${niceNumber(x)}$`, x < 0 ? 'above left' : 'above right'];
+    else if (onAxisY && kind === 'yint') [label, pos] = [tickShows(y) ? '' : `$${niceNumber(y)}$`, 'right'];
+    else [label, pos] = [`$(${niceNumber(x)},\\,${niceNumber(y)})$`, kind === 'max' ? 'above' : kind === 'min' ? 'below' : 'above right'];
+    out.push({ x, y, label, pos, drop: kind === 'max' || kind === 'min' || kind === 'cross', kind });
+  };
+  for (const { fn, dom } of fns) {
+    const [a, b] = dom;
+    if (a <= 0 && 0 <= b) {
+      const y0 = safe(fn, 0);
+      if (!Number.isNaN(y0)) add(0, y0, 'yint');
+    }
+    const h = (x) => safe(fn, x);
+    for (const z of zerosOf(h, a, b)) add(z, 0, 'xint');
+    // 極値: 差分の符号の変化
+    const n = 1200;
+    const dx = (b - a) / n;
+    let prevD = NaN;
+    for (let k = 1; k < n; k++) {
+      const x = a + dx * k;
+      const d = h(x + dx / 2) - h(x - dx / 2);
+      if (!Number.isNaN(prevD) && !Number.isNaN(d) && prevD * d < 0 && Math.abs(prevD) < 1e3 && Math.abs(d) < 1e3) {
+        // 黄金分割で詰める
+        let lo = x - dx;
+        let hi = x;
+        const isMax = prevD > 0;
+        for (let t = 0; t < 80; t++) {
+          const m1 = lo + (hi - lo) / 3;
+          const m2 = hi - (hi - lo) / 3;
+          if ((h(m1) < h(m2)) === isMax) lo = m1;
+          else hi = m2;
+        }
+        const xm = (lo + hi) / 2;
+        const ym = h(xm);
+        if (!Number.isNaN(ym)) {
+          // 極値が 0 なら x 軸に接する（重解）ので、x 切片として打つ
+          if (Math.abs(ym) < 1e-7) add(xm, 0, 'xint');
+          else add(xm, ym, isMax ? 'max' : 'min');
+        }
+      }
+      prevD = d;
+    }
+  }
+  // 2 つの関数の交点
+  for (let i = 0; i < fns.length; i++) {
+    for (let j = i + 1; j < fns.length; j++) {
+      const a = Math.max(fns[i].dom[0], fns[j].dom[0]);
+      const b = Math.min(fns[i].dom[1], fns[j].dom[1]);
+      if (!(a < b)) continue;
+      const h = (x) => safe(fns[i].fn, x) - safe(fns[j].fn, x);
+      for (const z of zerosOf(h, a, b)) add(z, safe(fns[i].fn, z), 'cross');
+    }
+  }
+  return out;
 }
 
 // ---------------- 図形（作図） ----------------
