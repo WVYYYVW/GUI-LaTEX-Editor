@@ -110,9 +110,11 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--panel-2); bor
 .editor-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--border); }
 #editor-area { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .empty-state { margin: auto; text-align: center; color: var(--muted); }
-.problem-meta { display: grid; grid-template-columns: 1.3fr 1fr auto; gap: 10px; padding: 10px 12px; align-items: end; background: var(--panel); border-bottom: 1px solid var(--border); }
+.problem-meta { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; align-items: end; background: var(--panel); border-bottom: 1px solid var(--border); }
 .problem-meta label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
-.pm-diff { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+.pm-diff { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; white-space: nowrap; }
+.pm-diff .stars { display: flex; flex-wrap: nowrap; }
+.problem-meta input { min-width: 0; width: 100%; }
 .stars button { border: none; background: none; padding: 0 1px; font-size: 18px; color: var(--border); }
 .stars button.on { color: #e3a008; }
 .field-tabs, .preview-tabs { display: flex; align-items: center; gap: 4px; padding: 6px 10px 0; background: var(--panel); border-bottom: 1px solid var(--border); }
@@ -133,7 +135,10 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--panel-2); bor
 .palette-grid button.text-item { font-size: 12.5px; }
 .palette-grid button.big { height: 52px; }
 
-.cm-host { flex: 1; min-height: 0; overflow: hidden; background: var(--panel); }
+.cm-host { flex: 1; min-height: 150px; overflow: hidden; background: var(--panel); }
+/* 窓が低いとき: 記号パレットを低くし、それでも足りなければ欄全体をスクロールして、エディタが 0 の高さにならないようにする */
+.editor-pane { overflow-y: auto; overflow-x: hidden; }
+@media (max-height: 760px) { .palette-grid { max-height: 86px; } }
 .cm-host .cm-editor { height: 100%; }
 .cm-host .cm-editor.cm-focused { outline: none; }
 
@@ -405,6 +410,12 @@ input.mid { width: 110px; }
 .pv-fig > svg { display: block; margin: 0 auto; }
 
 /* ---------- 書式ボタン ---------- */
+/* 欄の幅が狭いときは、書式のボタン類を次の行に折り返す（右端で見切れないように） */
+.field-tabs { flex-wrap: wrap; row-gap: 4px; }
+.field-tabs .write-bar, .field-tabs .fmt-bar, .field-tabs #toggle-palette { margin-bottom: 4px; }
+.write-bar { display: flex; align-items: center; gap: 3px; margin-right: 8px; }
+.write-bar button { padding: 2px 8px; font-size: 13px; white-space: nowrap; }
+.write-bar button[data-write="sub"] { color: var(--accent); border-color: var(--accent); }
 .fmt-bar { display: flex; align-items: center; gap: 3px; margin-right: 8px; }
 .fmt-bar button { padding: 2px 8px; font-size: 13px; }
 .fmt-bar select { padding: 2px 4px; font-size: 12px; }

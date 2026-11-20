@@ -86,6 +86,11 @@
               <button role="tab" data-field="body" class="active">問題文</button>
               <button role="tab" data-field="solution">解答・解説</button>
               <span class="tb-spacer"></span>
+              <div class="write-bar" id="write-bar">
+                <button data-write="sub" title="小問の番号「(1) 」を入れます。番号の形はレイアウトに合わせて付きます（Enter で次の番号）">小問 (1)</button>
+                <button data-write="math" title="数式を入れます（数式エディタ）">数式</button>
+                <button data-write="natural" class="hidden" title="\begin{enumerate} と \item で書かれた小問を、「(1) 」で始まる行の書き方に直します（見た目は変わりません）">(1) の書き方に直す</button>
+              </div>
               <div class="fmt-bar" id="fmt-bar" title="選択した文字に書式を付けます">
                 <button data-fmt="bold" title="太字 \textbf"><b>B</b></button>
                 <button data-fmt="italic" title="斜体 \textit"><i>I</i></button>

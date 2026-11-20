@@ -5,6 +5,7 @@ import { findMathRanges, maskComments } from './mathRanges.js';
 import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins } from './layout.js';
 import { findFigures, figureToSvg } from './figure.js';
 import { coverNotes } from './texExport.js';
+import { naturalToLatex } from './natural.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -236,7 +237,8 @@ export function renderLatex(src, macros = {}, opts = {}) {
     last = r.to;
   }
   joined += masked.slice(last);
-  return textToHtml(joined)
+  // 「(1) …」の行を小問にする（数式は目印に置き換えた後なので、ダブルクリック用の位置はずれない）
+  return textToHtml(naturalToLatex(joined))
     .replace(/\u0001(\d+)\u0002/g, (_m, i) => maths[Number(i)])
     .replace(/\u0005(\d+)\u0005/g, (_m, k) => {
       const f = figs[Number(k)];

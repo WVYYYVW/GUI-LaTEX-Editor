@@ -9,6 +9,7 @@ import { PALETTE } from './lib/palette.js';
 import { newDocument, newProblem, normalizeDoc } from './lib/model.js';
 import { findMathRanges, rangeAt, normalizeMathText } from './lib/mathRanges.js';
 import { clipboardToLatex, aiTextToLatex, htmlHasTex } from './lib/smartPaste.js';
+import { latexToNatural } from './lib/natural.js';
 import { buildAiPrompt, splitAiProblems, parseMathprobText } from './lib/aiPrompt.js';
 import { latexToMathML } from './lib/wordExport.js';
 import { initLayoutPanel, fitPages, enableSpaceDrag } from './layoutPanel.js';
@@ -92,6 +93,7 @@ const editor = createEditor($('#cm-host'), {
     setDirty(true);
     schedulePreview();
     scheduleListRefresh();
+    scheduleWriteBar();
   },
   getAutoHalfwidth: () => state.settings.autoHalfwidth !== false,
   keys: [
@@ -217,6 +219,12 @@ function renderStars(n) {
   }
 }
 
+let writeBarTimer;
+const scheduleWriteBar = () => {
+  clearTimeout(writeBarTimer);
+  writeBarTimer = setTimeout(updateWriteBar, 300);
+};
+
 function selectProblem(id, field = state.field) {
   state.selectedId = id;
   state.field = field;
@@ -231,6 +239,7 @@ function selectProblem(id, field = state.field) {
     $$('.field-tabs [data-field]').forEach((b) => b.classList.toggle('active', b.dataset.field === state.field));
     editor.load(editorKey(), p[state.field]);
   }
+  updateWriteBar();
   $$('#problem-list li').forEach((li) => li.classList.toggle('selected', li.dataset.id === id));
   renderPreview();
 }
@@ -509,6 +518,30 @@ function wrapSelection(before, after) {
   const text = editor.getText().slice(sel.from, sel.to);
   const start = sel.from + before.length;
   editor.replaceSelect(sel.from, sel.to, before + text + after, start, start + text.length);
+}
+// 「小問 (1)」「数式」「(1) の書き方に直す」
+$('#write-bar').addEventListener('mousedown', (e) => {
+  if (e.target.closest('button')) e.preventDefault(); // エディタのカーソルを保つ
+});
+$('#write-bar').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-write]');
+  if (!b || !currentProblem()) return;
+  if (b.dataset.write === 'sub') editor.insertSubQuestion();
+  else if (b.dataset.write === 'math') openMathEditor();
+  else if (b.dataset.write === 'natural') {
+    const t = editor.getText();
+    const n = latexToNatural(t);
+    if (n !== t) {
+      editor.replace(0, t.length, n, 0);
+      toast('小問を「(1) 」で始まる行の書き方に直しました（見た目は変わりません。元に戻すときは Ctrl/⌘+Z）', 'info', 5000);
+    }
+    updateWriteBar();
+  }
+});
+/** \begin{enumerate} で書かれた、直せる小問があるときだけ「(1) の書き方に直す」を出す */
+function updateWriteBar() {
+  const t = currentProblem() ? editor.getText() : '';
+  $('[data-write="natural"]').classList.toggle('hidden', !t.includes('\\begin{enumerate}') || latexToNatural(t) === t);
 }
 $('#fmt-bar').addEventListener('mousedown', (e) => {
   if (e.target.closest('button')) e.preventDefault(); // エディタの選択を保つ
