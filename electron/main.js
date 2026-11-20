@@ -6,6 +6,7 @@ const fssync = require('node:fs');
 const tex = require('./tex');
 const { readDocxXml } = require('./zip');
 const { initAutoUpdate, checkForUpdates, RELEASES_URL } = require('./updater');
+const { renderTikz } = require('./tikz');
 
 const isMac = process.platform === 'darwin';
 // 問題集ファイルの拡張子。以前の .mathprob も開ける
@@ -382,11 +383,23 @@ function registerIpc() {
     const abs = path.isAbsolute(file) ? file : projectPath ? path.join(path.dirname(projectPath), file) : null;
     if (!abs) return null;
     const ext = path.extname(abs).toLowerCase();
-    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' }[ext];
-    if (!mime) return null; // PDF などはプレビューしない
+    // PDF の画像は画面側で 1 ページ目を絵にする
+    const mime = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.pdf': 'application/pdf' }[ext];
+    if (!mime) return null;
     const buf = await fs.readFile(abs);
     return `data:${mime};base64,${buf.toString('base64')}`;
   });
+
+  // プレビュー用に TikZ の図を PDF にする
+  ipcMain.handle('tex:render-tikz', (_e, { code, preamble, projectPath }) =>
+    renderTikz({
+      code: String(code || ''),
+      preamble: String(preamble || ''),
+      enginePath: enginePath(),
+      cacheDir: path.join(app.getPath('userData'), 'tikz-cache'),
+      projectDir: projectPath ? path.dirname(projectPath) : undefined,
+    })
+  );
 
   // Electron 45 以降のクリップボード API（非同期・ClipboardItem）
   ipcMain.handle('clipboard:read', async () => {

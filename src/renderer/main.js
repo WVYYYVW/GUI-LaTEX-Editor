@@ -17,7 +17,9 @@ import { initLayoutPanel, fitPages, enableSpaceDrag } from './layoutPanel.js';
 import { paperSize, normalizeLayout, SUBJECTS } from './lib/layout.js';
 import { initFigureDialog } from './figureDialog.js';
 import { figureBlock, findFigures } from './lib/figure.js';
-import { setImageResolver, clearRenderCache } from './lib/preview.js';
+import { setImageResolver, setTikzResolver, clearRenderCache } from './lib/preview.js';
+import { pdfToImage, pdfDataUrlToImage } from './lib/pdfImage.js';
+import { expandScience } from './lib/chem.js';
 import { docxToProblems, docxToLatex } from './lib/docxImport.js';
 
 const api = window.api;
@@ -1322,7 +1324,7 @@ function resolveImage(file) {
     imageCache.set(key, 'loading');
     api
       .readImage({ file, projectPath: state.filePath })
-      .then((url) => imageCache.set(key, url || null))
+      .then(async (url) => imageCache.set(key, url?.startsWith('data:application/pdf') ? (await pdfDataUrlToImage(url)).url : url || null))
       .catch(() => imageCache.set(key, null))
       .finally(() => {
         clearRenderCache();
@@ -1334,6 +1336,36 @@ function resolveImage(file) {
   return v === 'loading' ? null : v;
 }
 setImageResolver(resolveImage);
+
+// TikZ の図をプレビューに出す（LuaLaTeX で小さな PDF にして絵にする。同じ図は覚えておく）
+const tikzCache = new Map();
+let tikzRedrawTimer;
+function resolveTikz(code) {
+  const preamble = state.doc.meta.preamble || '';
+  const key = `${preamble}\u0000${code}`;
+  let v = tikzCache.get(key);
+  if (!v) {
+    v = { state: 'loading' };
+    tikzCache.set(key, v);
+    api
+      .renderTikz({ code: expandScience(code), preamble, projectPath: state.filePath })
+      .then(async (r) => {
+        if (!r.ok) Object.assign(v, { state: 'error', error: r.error });
+        else Object.assign(v, { state: 'done' }, await pdfToImage(r.pdf));
+      })
+      .catch((err) => Object.assign(v, { state: 'error', error: String(err?.message || err) }))
+      .finally(() => {
+        // いくつも同時に終わることがあるので、まとめて描き直す
+        clearTimeout(tikzRedrawTimer);
+        tikzRedrawTimer = setTimeout(() => {
+          clearRenderCache();
+          renderPreview();
+        }, 80);
+      });
+  }
+  return v;
+}
+setTikzResolver(resolveTikz);
 
 const figureDialog = initFigureDialog({
   chooseImage: () => api.chooseImage({ projectPath: state.filePath }),

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('api', {
   openDocx: () => ipcRenderer.invoke('docx:open'),
   chooseImage: (args) => ipcRenderer.invoke('fig:choose-image', args),
   readImage: (args) => ipcRenderer.invoke('fig:read-image', args),
+  renderTikz: (args) => ipcRenderer.invoke('tex:render-tikz', args),
   readClipboard: () => ipcRenderer.invoke('clipboard:read'),
   writeClipboard: (data) => ipcRenderer.invoke('clipboard:write', data),
   confirmDiscard: () => ipcRenderer.invoke('app:confirm-discard'),

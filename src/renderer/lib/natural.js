@@ -33,7 +33,7 @@ const ENV_OPEN = /\\begin\{(enumerate|itemize)\}/g;
 const ENV_CLOSE = /\\end\{(enumerate|itemize)\}/g;
 const count = (re, s) => (s.match(re) || []).length;
 // 空行の後でも小問の続きとみなす行（字下げした行・別行の数式・数式の目印 \u0001）
-const continuesAfterBlank = (line) => /^[ \t　]/.test(line) || /^\s*(\\\[|\$\$|\\begin\{|\u0001|\u0005|% @fig)/.test(line);
+const continuesAfterBlank = (line) => /^[ \t　]/.test(line) || /^\s*(\\\[|\$\$|\\begin\{|\u0001|\u0004|\u0005|% @fig)/.test(line);
 
 /** 空行のあとでも、先に次の小問（2 以上）があれば、小問の続きとみなす */
 function nextMarkerAhead(lines, i) {

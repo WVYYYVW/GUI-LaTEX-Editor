@@ -124,6 +124,10 @@ kbd { font-family: var(--mono); font-size: 12px; background: var(--panel-2); bor
 .problem-meta input { min-width: 0; width: 100%; }
 /* 問題文から自動で付けた題名（書き換えると普通の表示に戻る） */
 #p-title.auto { color: var(--muted); }
+/* プレビューの TikZ の図・画像 */
+.pv-tikz, .pv-img { text-align: center; margin: 0.4em 0; }
+.pv-tikz img, .pv-img img { max-width: 100%; height: auto; }
+.preview:not(:has(.page)) .pv-tikz img { background: #fff; }
 /* 問題の一覧表 */
 .sb-head { display: flex; gap: 6px; align-items: center; }
 .sb-head #filter { flex: 1; min-width: 0; }

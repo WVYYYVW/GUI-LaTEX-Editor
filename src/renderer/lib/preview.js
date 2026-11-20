@@ -88,7 +88,11 @@ function convertTabular(body) {
 function textToHtml(s) {
   // 図・TikZ は PDF でのみ表示
   s = s.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, '\u0003TIKZ\u0003');
-  s = s.replace(/\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/g, (_m, f) => `\u0003IMG:${f}\u0003`);
+  const imgs = [];
+  s = s.replace(/\\includegraphics\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\}/g, (_m, opt, f) => {
+    imgs.push({ opt: opt || '', file: f.trim() });
+    return `\u0003IMG${imgs.length - 1}\u0003`;
+  });
   // 大問の中の「部」（\Part, \Part[A]）は新しい段落にする。番号の形はプリント全体の CSS（part-…）で決まる
   s = s.replace(/\\Part(?![a-zA-Z])\s*(?:\[([^\]]*)\])?/g, (_m, lab) => `\n\n\u0006P${lab == null ? '' : encodeURIComponent(lab)}\u0006`);
   // 空欄 \blank{ア}
@@ -214,7 +218,7 @@ function textToHtml(s) {
 
   return html
     .replace(/\u0003TIKZ\u0003/g, '<div class="pv-placeholder">TikZ の図（PDF 出力で表示されます）</div>')
-    .replace(/\u0003IMG:([^\u0003]*)\u0003/g, (_m, f) => `<div class="pv-placeholder">画像: ${f}（PDF 出力で表示されます）</div>`);
+    .replace(/\u0003IMG(\d+)\u0003/g, (_m, k) => imageHtml(imgs[Number(k)]));
 }
 
 /**
@@ -232,6 +236,12 @@ export function renderLatex(src, macros = {}, opts = {}) {
     const mark = `\u0005${k}\u0005`;
     work = work.slice(0, f.from) + mark + ' '.repeat(Math.max(0, f.to - f.from - mark.length)) + work.slice(f.to);
   }
+  const tikzCodes = [];
+  work = work.replace(/\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g, (m) => {
+    const mark = `\u0004${tikzCodes.length}\u0004`;
+    tikzCodes.push(m);
+    return mark + ' '.repeat(Math.max(0, m.length - mark.length));
+  });
   src = work;
   const masked = maskComments(src);
   const ranges = findMathRanges(src);
@@ -257,7 +267,36 @@ export function renderLatex(src, macros = {}, opts = {}) {
       const svg = figureToSvg(f.spec, { imageUrl: f.spec.type === 'image' ? imageResolver?.(f.spec.file) : undefined });
       const attrs = opts.field ? ` data-field="${opts.field}" data-from="${f.from}" title="ダブルクリックで図を編集"` : '';
       return `<div class="pv-fig"${attrs}>${svg}</div>`;
-    });
+    })
+    .replace(/\u0004(\d+)\u0004/g, (_m, k) => tikzHtml(tikzCodes[Number(k)]));
+}
+
+/** TikZ の図: LuaLaTeX で組んだ画像があればそれを、無ければ準備中などの表示 */
+function tikzHtml(code) {
+  const r = tikzResolver?.(code);
+  if (r?.state === 'done') return `<div class="pv-tikz"><img src="${r.url}" style="width:${r.widthPt.toFixed(2)}pt" alt="TikZ の図"></div>`;
+  if (r?.state === 'loading') return '<div class="pv-placeholder">TikZ の図を準備しています…</div>';
+  if (r?.state === 'error' && r.error === 'noEngine') return '<div class="pv-placeholder">TikZ の図（TeX が見つからないため、PDF 作成のときだけ描かれます）</div>';
+  if (r?.state === 'error') return `<div class="pv-placeholder">TikZ の図を描けませんでした: ${esc(r.error)}</div>`;
+  return '<div class="pv-placeholder">TikZ の図（PDF 出力で表示されます）</div>';
+}
+
+/** \includegraphics の画像。width=5cm・width=0.5\linewidth などの指定に合わせる */
+function imageHtml({ opt, file }) {
+  const url = imageResolver?.(file);
+  if (!url) return `<div class="pv-placeholder">画像: ${esc(file)}（読み込めないときは PDF 出力で表示されます）</div>`;
+  let w = '';
+  const abs = opt.match(/width\s*=\s*([\d.]+)\s*(cm|mm|pt|in)/);
+  const rel = opt.match(/width\s*=\s*([\d.]*)\s*\\(?:linewidth|textwidth|columnwidth|hsize)/);
+  if (abs) w = `width:${abs[1]}${abs[2]};`;
+  else if (rel) w = `width:${(Number(rel[1] || 1) * 100).toFixed(1)}%;`;
+  return `<div class="pv-img"><img src="${url}" style="${w}max-width:100%" alt="${esc(file)}"></div>`;
+}
+
+// TikZ の図 → 表示用の画像（main.js から設定。{state:'loading'|'done'|'error', url, widthPt, error}）
+let tikzResolver = null;
+export function setTikzResolver(fn) {
+  tikzResolver = fn;
 }
 
 // 画像ファイル → 表示用 URL（main.js から設定。未取得なら null を返し、取得後に再描画させる）
