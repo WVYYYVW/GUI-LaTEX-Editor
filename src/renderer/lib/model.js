@@ -1,5 +1,5 @@
 // 問題集ファイル（.mpb = JSON。以前の .mathprob も同じ形）のデータモデル
-import { defaultLayout, normalizeLayout, defaultProblemLayout } from './layout.js';
+import { defaultLayout, normalizeLayout, defaultProblemLayout, defaultCover } from './layout.js';
 import { suggestTitle } from './autoTitle.js';
 
 export const FORMAT_VERSION = 1;
@@ -10,25 +10,8 @@ export function newProblem(partial = {}) {
   return { id: uid(), title: '', tags: [], difficulty: 0, body: '', solution: '', layout: defaultProblemLayout(), ...partial };
 }
 
-/** 表紙（試験問題冊子の表紙） */
-export function defaultCover() {
-  return {
-    enabled: false,
-    header: '令和○年度 入学試験問題',
-    subject: '数　学',
-    target: '（理系）',
-    time: '120分',
-    notes: [
-      '問題は全部で{n}題である。',
-      '問題冊子に落丁・乱丁・印刷の不鮮明な箇所があれば，手を挙げて監督者に知らせること。',
-      '解答は，解答用紙の所定の欄に記入すること。所定の欄以外に記入したものは採点しない。',
-      '問題冊子の余白は，下書きに使用してよい。',
-      '試験終了後，問題冊子は持ち帰ってよい。',
-    ].join('\n'),
-    idField: true,
-    footer: '指示があるまで，この問題冊子を開いてはいけない。',
-  };
-}
+/** 表紙の既定値は layout.js（テーマの適用で使う）にある */
+export { defaultCover };
 
 export function defaultMeta() {
   return {

@@ -23,7 +23,153 @@ function theme(id, name, desc, source, pt, lh, layout, meta = {}) {
   };
 }
 
+// ---------------- 大学入学共通テスト ----------------
+// 大学入試センターが公開している令和 8 年度本試験の「数学①」「数学②」の問題冊子（B5・文字情報のある PDF）の
+// 文字と罫線の座標を読み取って測った。本文 24.0〜158.0mm（10pt・1 行 38 字・行送り 7.05mm）、1 行目のベースライン 31.1mm。
+//   - 「第1問」はゴシック 14pt を 23.3mm に、同じ行に「（配点　30）」。大問の本文は +1 字（27.5mm）、段落は 1 字下げ
+//   - 〔1〕〔2〕は 25.7mm に置き、その中身は 34.6mm（大問の本文 +2 字）から。⑴ は中身の左端、本文 +2 字、折り返し +1 字。(i) も同じ形
+//   - 解答欄は線の中心で 12.04×5.69mm の太枠（線 0.4mm）にゴシックの片仮名。3 字以上は 1 字ごとに広がる。選択肢から選ぶ欄は二重の枠、
+//     2 度目以降は細い枠。本文では \blank{ア}・\blank*{コ}・\blank[2]{ア} と書く
+//   - 別行立ての式は左寄せ（+4 字）、前後に 1 行ずつ空ける
+//   - ページ上部の科目名（ゴシック 12pt）は奇数ページは右、偶数ページは左、ベースライン 21.1mm。最初のページは中央に大きく（22pt）
+//   - ページ番号「— 4 —」はベースライン 243.4mm。大問が次のページに続くときは最後の行の下に「（…第1問は次ページに続く。）」（8pt）
+//   - 表紙: 上に枠で囲んだ注意、「数　学　①」と科目、右に（100点／70分）、「I　注意事項」、下に「II　解答上の注意」。裏表紙に解答上の注意
+// 表紙と裏表紙の文面は実物と同じ構成で、言い回しは独自のもの。
+// 表せないもの・違うもの: 実物は 1 ページごとに手で組んでいて、大問の途中でも余白を大きく取ってページを替える（ここでは TeX が自動で
+//   改ページする）／〔2〕の前の改ページ（必要なら本文に \newpage）／表紙の右上の「Ⓛ」や「(2103—1)」などの印刷管理の印／
+//   (i) の字形（実物は 1 字の外字）／マークシートの見本の図（表で代用）。
+const KYOTSU_BACK_NOTES = [
+  '解答は，解答用紙の問題番号に対応する解答欄にマークしなさい。',
+  '問題文中の \\blank{ア}，\\blank{イウ} などには，符号（$-$）または数字（$0$〜$9$）が一つずつ入ります。ア，イ，ウ，…の一つ一つを，解答用紙のア，イ，ウ，…の欄にマークして答えなさい。',
+  '例えば \\blank{アイウ} に $-83$ と答えるときは，次のようにマークします。',
+  '|欄|ア|イ|ウ',
+  '|マークするもの|$-$|$8$|$3$',
+  '分数で答えるときは，符号は分子につけ，それ以上約分できない形で答えなさい。',
+  '小数で答えるときは，指定された桁の一つ下の桁を四捨五入して答えなさい。指定された桁までの $0$ もマークしなさい。',
+  '根号を含む形で答えるときは，根号の中の自然数ができるだけ小さくなる形で答えなさい。',
+  '二重の枠で示した \\blank*{コ} などには，選択肢の中から一つを選んで答えなさい。',
+  '同じ欄が問題文中に 2 度以上出てくるときは，2 度目からは \\blank[2]{サシ} のように細い枠で示します。',
+].join('\n');
+
+function kyotsuTheme(id, name, desc, header, cover, title) {
+  return {
+    id,
+    name,
+    desc,
+    source: 'https://www.dnc.ac.jp/kyotsu/kakomondai/r8/r8_honshiken_mondai.html',
+    university: true,
+    layout: {
+      titleBlock: false,
+      paper: 'b5',
+      marginLeft: 24.0,
+      marginRight: 24.0,
+      marginTop: 26.2, // ltjsarticle の topskip（約 13.9pt）の分（1 行目のベースラインが 31.1mm になる）
+      marginBottom: 29.0, // 1 ページ 29 行
+      bodyPt: 10,
+      lineHeight: 2.0,
+      charsPerLine: 0,
+      header,
+      headerStyle: 'both',
+      headerAlign: 'outside',
+      headerSize: 12,
+      headerFont: 'gothic',
+      headBaseline: 21.1,
+      footBaseline: 243.4,
+      title: { size: 22, font: 'gothic', bold: false, baseline: 36.9, subSize: 12, subBaseline: 45.1, next: 59.8, ...title },
+      contNote: `（${header}第{n}問は次ページに続く。）`,
+      head: { style: 'dai', font: 'gothic', bold: false, size: 14, position: 'above', align: 'left', showTitle: false, gap: 3.0, outdent: 0.7 },
+      spaceBefore: 0,
+      spaceAfterHead: 6.6,
+      bodyIndent: 3.5,
+      parIndent: true,
+      parSkip: 0,
+      part: { style: 'arabicKikko', font: 'mincho', bold: false, size: 0, align: 'left', hang: true, indent: 0, bodyIndent: 7.05, gap: 0, spaceBefore: 0, spaceAfter: 0 },
+      sub: { paren: 'half', indent: 0, sep: 3.5, gap: 7.05, wrap: 'left', wrapIndent: 3.5 },
+      subLabel: 'pparen',
+      sub2: { label: 'roman', indent: 0, sep: 4.4, gap: 7.05, wrap: 'left', wrapIndent: 3.5 },
+      blank: { style: 'kyotsu', width: 12, height: 0 },
+      displayAlign: 'left',
+      mathIndent: 14.1,
+      displaySkip: 7.03,
+      displaySkipAbove: 9.4, // 式の上は行送りの調整が入らないので、そのぶん多めに（前後とも 1 行空き）
+      pointsStyle: 'after',
+      pointsFormat: '（配点　{n}）',
+      newPageEach: true,
+      afterEach: 'none',
+      pageNumber: 'kyotsu',
+      punct: 'commaMaru',
+    },
+    meta: {
+      answerMode: 'separate',
+      spaceAfter: 0,
+      showDifficulty: false,
+      cover: {
+        enabled: true,
+        style: 'kyotsu',
+        header: '',
+        target: '',
+        idField: false,
+        notesTitle: '注　意　事　項',
+        footer: '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+        backTitle: '解答上の注意',
+        backRef: '解答上の注意は裏表紙に書いてあります。問題冊子を裏返して必ず読みなさい。',
+        backNotes: KYOTSU_BACK_NOTES,
+        pageNumber: true,
+        points: '100点',
+        time: '70分',
+        timeLabel: '',
+        ...cover,
+      },
+    },
+  };
+}
+
+export const KYOTSU_THEMES = [
+  kyotsuTheme(
+    'kyotsu-math1',
+    '共通テスト（数学①）',
+    '表紙・注意事項・解答欄の枠まで共通テストの冊子に合わせる',
+    '数学Ⅰ，数学Ａ',
+    {
+      subject: '数　学　①',
+      subtitle: '〔『数学Ⅰ，数学Ａ』〕',
+      firstPage: 4,
+      notes: [
+        '出題科目とページは，次の表のとおりです。',
+        '|出　題　科　目|ペ　ー　ジ|解　答　方　法',
+        '|『数学Ⅰ，数学Ａ』|4〜|全部の問題に解答しなさい。',
+        '解答用紙に正しく記入・マークしていない場合は，採点できないことがあります。とくに，解答用紙の\\textbf{解答科目欄にマークがない場合や，複数の科目にマークした場合は，0点になります。}',
+        '試験中に問題冊子の印刷の乱れ，ページの抜けや重なり，解答用紙の汚れなどに気づいたときは，手を挙げて監督者に知らせなさい。',
+        '問題冊子の余白は下書きに使ってかまいませんが，どのページも切り離してはいけません。',
+        '試験が終わったら，問題冊子は持ち帰りなさい。',
+      ].join('\n'),
+    },
+    { sub: '（全　問　必　答）' }
+  ),
+  kyotsuTheme(
+    'kyotsu-math2',
+    '共通テスト（数学②）',
+    '数学Ⅱ・B・C の冊子。選択問題の注意つき',
+    '数学Ⅱ，数学Ｂ，数学Ｃ',
+    {
+      subject: '数　学　②',
+      subtitle: '〔『数学Ⅱ，数学Ｂ，数学Ｃ』〕',
+      firstPage: 3,
+      notes: [
+        'この問題冊子には，{n}問の問題があります。',
+        '解答用紙に正しく記入・マークしていない場合は，採点できないことがあります。',
+        '試験中に問題冊子の印刷の乱れ，ページの抜けや重なり，解答用紙の汚れなどに気づいたときは，手を挙げて監督者に知らせなさい。',
+        '\\textbf{選択問題は，指定された数の問題を選んで}，その問題番号の解答欄に解答しなさい。',
+        '問題冊子の余白は下書きに使ってかまいませんが，どのページも切り離してはいけません。',
+        '試験が終わったら，問題冊子は持ち帰りなさい。',
+      ].join('\n'),
+    },
+    { sub: '' }
+  ),
+];
+
 export const UNIVERSITY_THEMES = [
+  ...KYOTSU_THEMES,
   // 東京大学：「第 1 問」を中央に。本文 13.7〜168.1mm（左右とも約 13.8mm）。(1) は本文の左端、折り返しは 1 字下げ
   theme('univ-tokyo', '東京大学', '「第 1 問」中央・1問1ページ・B5', 'https://www.u-tokyo.ac.jp/ja/admissions/undergraduate/r8_exam.html', 11.5, 1.9, {
     paper: 'b5',
@@ -251,7 +397,7 @@ UNIVERSITY_THEMES.push(
   // 「第1問」はゴシック太字・本文と同じ大きさで、本文の左端より 1 字外（24.2mm）。本文 27.6〜157.6mm、10pt・行送り 2 倍。
   // I, II は本文の左端・明朝、1 字空けて本文（本文の左端 +7.1mm）、折り返しは 1 字下げ（+3.6mm）。前に 1 行空き。
   // ⑴ は本文 +3.4mm、本文 +10.8mm、折り返しは +7.2mm（2 字下げ）。小問のまとまりの前は 1 行空き、小問どうしは空きなし。
-  // 表せないもの: PART の 2 行目以降の字下げ（3.6mm）／小問のまとまりの前だけの 1 行空き（sub.gap は 0 にした）／
+  // PART の 2 行目以降の字下げ（3.6mm）は part.hang、小問のまとまりの前だけの 1 行空きは sub.before で表す（下の FIXES）。表せないもの:
   //   科目の最後の「計算用紙（切り離さないで用いよ。）」ページ。
   theme('univ-tokyo-phys', '東京大学（物理）', '「第1問」左上・I, II・⑴・1問ごとに改ページ', 'https://www.u-tokyo.ac.jp/ja/admissions/undergraduate/r8_exam.html', 10, 2.0, {
     paper: 'b5',
@@ -278,7 +424,7 @@ UNIVERSITY_THEMES.push(
   // 化学：体裁は物理と同じ。設問は「〔問〕」の下に ア, イ, ウ（ゴシック太字・括弧なし）を本文 +3.6mm に置き、
   // 本文は +10.7mm、折り返しも +10.7mm（ぶら下げ）。選択肢は ⑴〜⑸（+10.7mm、本文 +17.8mm）。
   // 空欄は四角の枠に a, b / あ, い（約 14.0×6.1mm）。原子量などは各大問の最初に「元素｜原子量」の表と「気体定数 R = …」。
-  // 表せないもの: ア を太字にすること／「〔問〕」の小見出し。
+  // 太字の ア は kataBold（下の FIXES）。表せないもの: 「〔問〕」の小見出し。
   theme('univ-tokyo-chem', '東京大学（化学）', '「第1問」左上・問ア〜・□空欄・1問ごとに改ページ', 'https://www.u-tokyo.ac.jp/ja/admissions/undergraduate/r8_exam.html', 10, 2.0, {
     paper: 'b5',
     marginLeft: 24.2,
@@ -307,7 +453,7 @@ UNIVERSITY_THEMES.push(
   // 「物理問題　I」はゴシック太字・約 14pt を本文の左端に。本文 23.3〜157.2mm、10pt・行送り 6.5mm（1.85 倍）、段落は 1 字下げ。
   // (1) は本文の左端、本文と折り返しは +7.1mm（ぶら下げ）。(1) の中の ⒜ は +7.1mm、本文 +14.3mm、折り返し +10.7mm。
   // 空欄は四角の枠にカタカナ（約 14.2×6.0mm）。大問ごとに改ページし、余ったページは中央上に「白紙」。
-  // 表せないもの: 見出しの右の「(3問題 100点)」／(1) の中の ⒜ の段。
+  // (1) の中の ⒜ の段は sub2（下の FIXES）。表せないもの: 見出しの右の「(3問題 100点)」。
   theme('univ-kyoto-phys', '京都大学（物理）', '「物理問題 I」・(1)ぶら下げ・□空欄・最後に終わりの一文', 'https://www.kyoto-u.ac.jp/ja/admissions/undergrad/past-eq/r8-eq', 10, 1.85, {
     paper: 'b5',
     marginLeft: 23.2,
@@ -360,7 +506,7 @@ UNIVERSITY_THEMES.push(
   // □番号（7.0mm 角・細線・ゴシック）は 23.9mm（本文の左端より 7.5mm 外）、1 行目は枠の後 4.0mm から、折り返しは本文の左端。
   // 本文 31.4〜157.6mm、10pt・行送り 2 倍。設問は「問⑴」を本文の左端、本文 +10.3mm、折り返し +7.0mm。
   // その中の (a)(b) は +6.8mm、本文 +13.9mm、折り返し +10.9mm。大問ごとに改ページ、余ったページは右上に「——このページは白紙——」。
-  // 表せないもの: 問⑴ の中の (a) の段／白紙ページの文言。
+  // 問⑴ の中の (a) の段は sub2（下の FIXES）。表せないもの: 白紙ページの文言。
   theme('univ-tohoku-phys', '東北大学（物理）', '□枠番号を余白に張り出し・問⑴・1問ごとに改ページ', 'https://admissions.tohoku.ac.jp/ja/materials/ito/', 10, 2.0, {
     paper: 'b5',
     marginLeft: 31.4,
@@ -383,7 +529,7 @@ UNIVERSITY_THEMES.push(
   // 化学：同じ体裁。科目の最初に「計算のために必要な場合には，次の数値を使用せよ。原子量 H = 1.0 …」（本文 +6.9mm の段落）。
   // 〔I〕〔II〕（明朝）は本文の左端、本文 +10.6mm、折り返し +6.9mm。前に約 9mm、後（問 1 の前）に 1 行空き。
   // 「問 1」は本文の左端、本文 +10.3mm、折り返し +6.9mm、設問の間は 1 行空き。
-  // 表せないもの: PART の 2 行目以降の字下げ（6.9mm）。
+  // PART の 2 行目以降の字下げ（6.9mm）は part.hang で表す（下の FIXES）。
   theme('univ-tohoku-chem', '東北大学（化学）', '□枠番号を張り出し・〔I〕・問 1・1問ごとに改ページ', 'https://admissions.tohoku.ac.jp/ja/materials/ito/', 10, 2.0, {
     paper: 'b5',
     marginLeft: 31.4,
@@ -454,7 +600,7 @@ UNIVERSITY_THEMES.push(
   // 〔1〕（ゴシック・約 13pt）は 22.5mm（本文の左端より 8.7mm 外。〔 の字の左の空きの分、outdent は 9.5）、同じ行に「次の文章を読み，問1〜問4に答えよ。(45点)」、その後 1 行空き。
   // 本文 31.2〜156.6mm、10pt・行送り 2 倍、段落は 1 字下げ。「問 1.」（問 はゴシック太字）は本文の左端、本文 +11.1mm、折り返し +6.8mm。
   // その中の ⑴ は +6.6mm、本文 +14.2mm、折り返し +10.7mm、⑴ どうしは約 3.5mm 空き。
-  // 表せないもの: 「問」だけ太字にすること／問 1. の中の ⑴ の段／科目の扉ページ／番号の行の後の 1 行空き。
+  // 太字の「問」は toiBoldDot、問 1. の中の ⑴ は sub2 で表す（下の FIXES）。表せないもの: 科目の扉ページ／番号の行の後の 1 行空き。
   theme('univ-kyushu-phys', '九州大学（物理）', '〔1〕と前文・(点)・問 1.・1問ごとに改ページ', 'https://www.kyushu-u.ac.jp/ja/admission/faculty/exam_question', 10, 2.0, {
     paper: 'b5',
     marginLeft: 31.2,
@@ -476,7 +622,7 @@ UNIVERSITY_THEMES.push(
   }, { subject: 'physics' }),
   // 化学：同じ体裁。扉ページに「必要な場合は，次の値を用いよ。原子量：H = 1.00, …」と構造式の記入例。
   // 文章 ⑴〜⑶ を ⑴ で区切る（本文の左端、同じ行から本文、折り返し +3.5mm）。空欄は「〔 ア 〕」（亀甲括弧）。
-  // 文章の区切りの ⑴ は「部」（\Part）で入れる。表せないもの: 区切りの ⑴ の 2 行目以降の字下げ（3.5mm）。
+  // 文章の区切りの ⑴ は「部」（\Part）で入れる。区切りの ⑴ の 2 行目以降の字下げ（3.5mm）は part.hang で表す（下の FIXES）。
   theme('univ-kyushu-chem', '九州大学（化学）', '〔1〕と前文・(点)・問 1.・〔 ア 〕空欄', 'https://www.kyushu-u.ac.jp/ja/admission/faculty/exam_question', 10, 2.0, {
     paper: 'b5',
     marginLeft: 31.2,
@@ -527,7 +673,7 @@ UNIVERSITY_THEMES.push(
   // 化学：同じ体裁。科目の最初に「…必要があれば，次の数値を用いよ。原子量：H = 1.0，C = 12 …／ファラデー定数 …」。
   // □番号の行は「I，II に答えよ。」だけ。I, II（明朝）は本文 +1.0mm、同じ行から本文（+7.1mm）。
   // PART の中の文章は本文 +3.6mm（段落の 1 行目はさらに 1 字下げ）、「問 1」も +3.6mm、本文 +14.2mm。空欄は枠に (ア) / A。
-  // 表せないもの: PART の中身全体の字下げ（3.6mm）。
+  // PART の中身全体の字下げ（3.6mm）は part.hang、太字の「問」は toiBold で表す（下の FIXES）。
   theme('univ-hokudai-chem', '北海道大学（化学）', '□枠番号を張り出し・I, II・問 1・□空欄', 'https://www.hokudai.ac.jp/admission/R08_Aexam_Science.pdf', 10, 2.0, {
     paper: 'a4',
     marginLeft: 44.3,
@@ -583,7 +729,7 @@ UNIVERSITY_THEMES.push(
   // 化学：「第 I 問」（ゴシック太字・約 13pt）と小さく「(50点満点)」。本文 27.7〜157.6mm。
   // 問題番号は通し番号の「1」（ゴシック太字・括弧なし）を本文より 2mm 外に置き、本文 +3.5mm、選択肢は「1.」を +1.9mm、本文 +7.3mm。
   // 原子量は各問題の文中に「ただし，各元素の原子量は，H = 1，C = 12 … とする。」。下書き用紙が多い。
-  // 表せないもの: 本文の左端より外に出る太字の通し番号。
+  // 本文の左端より外に出る太字の通し番号は numBold と負の字下げで表す（下の FIXES）。
   theme('univ-isct-chem', '東京科学大学（化学）', '「第 I 問」と(点満点)・通し番号の問題・下書き用紙', 'https://admissions.isct.ac.jp/ja/013/undergraduate/examination-questions', 10, 2.0, {
     paper: 'b5',
     marginLeft: 23.6,
@@ -707,8 +853,1010 @@ UNIVERSITY_THEMES.push(
   }, { subject: 'chemistry' }),
 );
 
+// ---------------- 数学: 追加した大学 ----------------
+// 公式サイト（東京理科大学は大学が案内している Box の共有フォルダ）の令和 8 年度（2026 年度）前期の数学の問題 PDF を画像にして測った。
+// 1 行目の位置は「ベースライン − 4.9mm（ltjsarticle の topskip）」を上余白にしている。
+UNIVERSITY_THEMES.push(
+  // 早稲田大学（基幹・創造・先進理工）：B5 のスキャン。本文 37.2〜156.6mm（1 行 30 字）。「[ Ⅰ ]」（Ⅰ は太字）は本文の左端より 9.5mm 外、
+  // 1 行目は番号の後 6.0mm から。(1) は本文の左端、本文 +8.9mm（ぶら下げ）、小問の前に 2.6mm。問題は続けて組み、最後に「［以　下　余　白］」
+  theme('univ-waseda', '早稲田大学（理工）', '「[ Ⅰ ]」を張り出し・(1)・最後に［以下余白］', 'https://www.waseda.jp/inst/admission/other/2025/11/17/19437/', 11.3, 1.74, {
+    paper: 'b5',
+    marginLeft: 37.2,
+    marginRight: 25.4,
+    marginTop: 17.9,
+    head: { style: 'squareRoman', font: 'mincho', bold: false, size: 11.5, position: 'inline', outdent: 9.5, showTitle: false, gap: 6.0 },
+    spaceBefore: 7.0,
+    parIndent: false,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 8.9, sep: 4.4, gap: 0.85, wrap: 'hang', wrapIndent: 0, before: 2.6 },
+    subLabel: 'paren',
+    displayAlign: 'center',
+    pageNumber: 'dash',
+    punct: 'commaMaru',
+    endText: '［以　下　余　白］',
+  }),
+  // 広島大学：B5（文字はアウトライン）。〔 1 〕（明朝・約 13.7pt）は本文の左端より 11.9mm 外、1 行目は本文 +3.2mm から。
+  // 本文 37.6〜153.5mm（1 行 33 字）・行送り 6.6mm。(1) は本文 +1.5mm、本文 +7.6mm（ぶら下げ）。偶数ページに 1 問ずつ、ほかは「空　白」
+  theme('univ-hiroshima', '広島大学', '〔 1 〕を張り出し・(1)・1問1ページと空白ページ', 'https://www.hiroshima-u.ac.jp/nyushi/gakubu/kakomon/koukai/r8_iz', 10, 1.88, {
+    paper: 'b5',
+    marginLeft: 37.6,
+    marginRight: 28.5,
+    marginTop: 22.9,
+    head: { style: 'bracketSp', font: 'mincho', bold: false, size: 13.7, position: 'inline', outdent: 11.9, showTitle: false, gap: 5.5 },
+    spaceBefore: 0,
+    parIndent: false,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 7.6, sep: 2.3, gap: 5.1, wrap: 'hang', wrapIndent: 0, before: 2.4 },
+    subLabel: 'paren',
+    displayAlign: 'center',
+    newPageEach: true,
+    afterEach: 'draft',
+    draftText: '空　白',
+    pageNumber: 'dash',
+    punct: 'commaMaru',
+  }),
+  // 千葉大学：B5（LaTeX で組まれた版面）。□番号（8.1×6.1mm・太字）は本文の左端の外にぴったり、1 行目は枠の後 3.9mm から。
+  // 本文 35.1〜155.7mm・行送り 8.35mm と広い。(1) は本文 +2.9mm、本文 +10.0mm（ぶら下げ）。1 問 1 ページ
+  theme('univ-chiba', '千葉大学', '横長の□番号を張り出し・(1)・1問1ページ', 'https://www.chiba-u.jp/admissions/gakubu/past-eq/r8zenki.html', 11.2, 2.12, {
+    paper: 'b5',
+    marginLeft: 35.1,
+    marginRight: 26.3,
+    marginTop: 37.3, // 大きな番号の行が 0.7mm 下がる分を引いた（1 行目のベースライン 42.9mm）
+    head: { style: 'box', boxRule: 'thin', boxSize: 8.1, boxHeight: 6.1, font: 'mincho', bold: true, size: 17, position: 'inline', outdent: 8.1, showTitle: false, gap: 3.9 },
+    spaceBefore: 0,
+    parIndent: false,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 10.0, sep: 2.7, gap: 3.4, wrap: 'hang', wrapIndent: 0, before: 1.0 },
+    subLabel: 'paren',
+    displayAlign: 'center',
+    newPageEach: true,
+    pageNumber: 'dash',
+    punct: 'commaMaru',
+  }),
+  // 東京理科大学（理学部第一部 B 方式）：B5（LaTeX で組まれた版面・1 行 37 字）。太枠番号（8.8×7.4mm）は本文の左端より 7.0mm 外、
+  // 1 行目は枠の後 3.5mm から。前文の最後に「(40 点)」。(1) は本文の左端、折り返しは 1 字下げ、小問の前に 1 行空き。空欄は 7.0×5.6mm の枠
+  theme('univ-tus', '東京理科大学', '横長の太枠番号・前文末に(点)・(1)・下書き用紙', 'https://www.tus.ac.jp/admissions/university/data/', 9.62, 2.03, {
+    paper: 'b5',
+    marginLeft: 31.0,
+    marginRight: 26.0,
+    marginTop: 25.3, // 大きな番号の行が 1.2mm 下がる分を引いた（番号の行のベースライン約 31.4mm）
+    head: { style: 'box', boxRule: 'thick', boxSize: 8.8, boxHeight: 7.4, font: 'gothic', bold: false, size: 17, position: 'inline', outdent: 7.0, showTitle: false, gap: 3.5 },
+    spaceBefore: 0,
+    parIndent: false,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 0, sep: 3.5, gap: 0, wrap: 'left', wrapIndent: 3.5, before: 7.1 },
+    subLabel: 'paren',
+    blank: { style: 'box', width: 7.0, height: 5.6 },
+    pointsStyle: 'bodyEnd',
+    pointsFormat: '({n} 点)',
+    displayAlign: 'center',
+    newPageEach: true,
+    pageNumber: 'dash',
+    punct: 'commaMaru',
+  }),
+  // 熊本大学（数学②）：A4 のスキャン。太枠番号（7.1mm 角）は本文の左端の外、1 行目は枠の後 3.5mm から。本文 36.0〜約 177mm。
+  // 「（問 1）」は本文の左端、本文 +13.1mm（ぶら下げ）。1 ページに 2 問
+  theme('univ-kumamoto', '熊本大学', '太枠番号を張り出し・（問 1）・A4', 'https://www.kumamoto-u.ac.jp/nyuushi/gakubunyushi/kakomon', 9.6, 1.99, {
+    paper: 'a4',
+    marginLeft: 36.0,
+    marginRight: 33.0,
+    marginTop: 29.6, // 番号の行が 0.9mm 下がる分を引いた（1 行目のベースライン 35.4mm）
+    head: { style: 'box', boxRule: 'thick', boxSize: 7.1, font: 'gothic', bold: true, size: 14, position: 'inline', outdent: 7.4, showTitle: false, gap: 3.5 },
+    spaceBefore: 14,
+    parIndent: false,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 13.1, sep: 1.5, gap: 0, wrap: 'hang', wrapIndent: 0, before: 3.3 },
+    subLabel: 'toiParenFull',
+    displayAlign: 'left',
+    mathIndent: 6.4,
+    pageNumber: 'dash',
+    punct: 'commaMaru',
+  }),
+  // 岡山大学：B5 のスキャン。1 ページ目の上に「数　学（数学Ⅰ・…）」（太字・約 11pt）。□番号（7.0mm 角・細線）は本文の上の行に、
+  // 本文の左端より 3.2mm 外。本文 28.1〜155.6mm（1 行 36 字）、段落は 1 字下げ。(1) は本文 +1.6mm、本文 +8.0mm（ぶら下げ）、
+  // その中の (a) は本文 +5.9mm（ぶら下げ）。1 ページに 2 問
+  theme('univ-okayama', '岡山大学', '□番号を本文の上に・(1)・(a)・1ページ目に科目名', 'https://www.okayama-u.ac.jp/tp/admission/kaiji_ippan05.html', 10.1, 1.77, {
+    paper: 'b5',
+    marginLeft: 24.9,
+    marginRight: 26.4,
+    marginTop: 26.3,
+    header: '数　学（数学Ⅰ・数学Ⅱ・数学Ⅲ・数学Ａ・数学Ｂ・数学Ｃ）',
+    headerStyle: 'title',
+    title: { size: 11, font: 'mincho', bold: true, baseline: 31.2, next: 43.0 },
+    head: { style: 'box', boxRule: 'thin', boxSize: 7.0, font: 'mincho', bold: true, size: 13, position: 'above', align: 'left', showTitle: false, gap: 0 },
+    spaceBefore: 9.1,
+    spaceAfterHead: 2.0,
+    bodyIndent: 3.2,
+    parIndent: true,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 8.0, sep: 2.4, gap: 1.0, wrap: 'hang', wrapIndent: 0, before: 3.1 },
+    subLabel: 'paren',
+    sub2: { label: 'alpha', indent: 5.9, sep: 3.0, gap: 0, wrap: 'hang', wrapIndent: 0 },
+    displayAlign: 'center',
+    pageNumber: 'dash',
+    punct: 'commaMaru',
+  }),
+  // 金沢大学：B5（文字はアウトライン）。□番号（6.45×6.1mm・細線・ゴシック）は本文の左端より 5.0mm 外、1 行目は枠の後 3.2mm から。
+  // 本文 30.4〜154.1mm（1 行 33 字）。(1) は本文 +2.0mm、本文 +9.7mm（ぶら下げ）。1 ページに 2 問、ページ番号は「– 1 –」
+  theme('univ-kanazawa', '金沢大学', '□番号を張り出し・(1)・「– 1 –」', 'https://www.kanazawa-u.ac.jp/admission/admission-information/past-exam', 10.7, 1.73, {
+    paper: 'b5',
+    marginLeft: 30.4,
+    marginRight: 27.9,
+    marginTop: 28.0,
+    head: { style: 'box', boxRule: 'thin', boxSize: 6.45, boxHeight: 6.1, font: 'gothic', bold: true, size: 12, position: 'inline', outdent: 5.0, showTitle: false, gap: 3.2 },
+    spaceBefore: 16,
+    parIndent: false,
+    parSkip: 0,
+    sub: { paren: 'half', indent: 9.7, sep: 3.7, gap: 3.2, wrap: 'hang', wrapIndent: 0, before: 1.0 },
+    subLabel: 'paren',
+    displayAlign: 'center',
+    pageNumber: 'endash',
+    punct: 'commaMaru',
+  })
+);
+
+// ---------------- 前に作ったテーマで表せなかったものを直す ----------------
+// 部の中身全体の字下げ（part.hang）、小問の中の小問（sub2）、「問」だけ太字の小問番号、本文より外に出る太字の通し番号、
+// 小問のまとまりの前だけの空き（sub.before）を使う。値は各テーマのコメントの実測値から。
+const FIXES = {
+  // I, II は本文の左端、1 行目は +7.1mm、2 行目以降は +3.6mm。小問のまとまりの前は 1 行空き
+  'univ-tokyo-phys': { part: { hang: true, indent: 0, bodyIndent: 3.6, gap: 5.8 }, sub: { before: 7.05 } },
+  'univ-tokyo-chem': { subLabel: 'kataBold' },
+  // (1) の中の ⒜ は (1) の本文の左端、本文 +7.2mm、折り返し +3.6mm
+  'univ-kyoto-phys': { sub2: { label: 'aparen', indent: 0, sep: 3.67, gap: 0, wrap: 'left', wrapIndent: 3.6 } },
+  // 問⑴ の中の (a) は本文 +6.8mm、本文 +13.9mm、折り返し +10.9mm（問⑴ の折り返しは +7.0mm）
+  'univ-tohoku-phys': { sub2: { label: 'alpha', indent: -0.2, sep: 4.2, gap: 0, wrap: 'left', wrapIndent: 3.9 } },
+  // 〔I〕は本文の左端、1 行目は +10.6mm、2 行目以降は +6.9mm
+  'univ-tohoku-chem': { part: { hang: true, indent: 0, bodyIndent: 6.9, gap: 5.8 } },
+  // 「問」はゴシック太字。問 1. の中の ⑴ は本文 +6.6mm、本文 +14.2mm、折り返し +10.7mm、⑴ どうしは約 3.5mm 空き
+  'univ-kyushu-phys': { subLabel: 'toiBoldDot', sub2: { label: 'pparen', indent: -0.2, sep: 4.07, gap: 3.5, wrap: 'left', wrapIndent: 3.9 } },
+  // 区切りの ⑴ の 2 行目以降は +3.5mm
+  'univ-kyushu-chem': { subLabel: 'toiBoldDot', part: { hang: true, indent: 0, bodyIndent: 3.5, gap: 1.0 } },
+  'univ-hokudai-phys': { subLabel: 'toiBold' },
+  // I, II は本文 +1.0mm、1 行目は +7.1mm、部の中身は +3.6mm。「問 1」は部の中身の左端から本文 +10.6mm
+  'univ-hokudai-chem': { subLabel: 'toiBold', part: { hang: true, indent: 1.0, bodyIndent: 3.6, gap: 4.8 }, sub: { indent: 10.6 } },
+  // 通し番号の太字の「1」は本文より 2mm 外、本文は +3.5mm
+  'univ-isct-chem': { subLabel: 'numBold', sub: { indent: -2.0, sep: 3.7, wrap: 'left', wrapIndent: 0 } },
+};
+for (const t of UNIVERSITY_THEMES) {
+  const f = FIXES[t.id];
+  if (!f) continue;
+  for (const [k, v] of Object.entries(f)) t.layout[k] = v && typeof v === 'object' ? { ...(t.layout[k] || {}), ...v } : v;
+}
+
+// ---------------- 表紙 ----------------
+// 公開 PDF に表紙が含まれている大学について、表紙の構成（年度・試験名の行、科目名、試験時間・配点、注意事項の数と番号の形、
+// ページ番号の有無）と位置（用紙の上端からのベースライン, mm）を合わせた。注意事項は実物と同じ目的・順序で、言い回しは独自のもの。
+// 受験番号の欄はどの大学の表紙にもない（解答用紙の側にある）ので付けない。大学の校章・印刷管理の記号・表紙の中の表（東北・北大）・
+// 数字の字体見本（東京科学・早稲田）は入れていない。
+const NOTE = (...a) => a.join('\n');
+const COVERS = {
+  // 東京大学（数学）：明朝。「入　学　試　験　問　題」22pt、「数　学（理科）」22pt、（配点）14pt、日付と時刻 14pt、「注　意　事　項」14pt を中央に。
+  // 注意 10 項目（5〜7 はゴシック）、番号は全角数字、本文 31.0〜158.0mm、行送り 7.05mm。表紙に「― 1 ―」、2 ページ目は白紙
+  'univ-tokyo': {
+    header: '入　学　試　験　問　題',
+    headerFont: 'mincho',
+    headerSize: 22,
+    subject: '数　学（理科）',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '',
+    points: '（配点120点）',
+    pointsSize: 14,
+    time: '令和○年○月○日　14時―16時30分',
+    timeLabel: '',
+    timeSize: 14,
+    timeFont: 'mincho',
+    pos: { header: 38.0, subject: 52.4, points: 64.1, time: 78.2, notes: 92.3 },
+    notesTitle: '注　意　事　項',
+    notesTitleAlign: 'center',
+    notesTitleSize: 14,
+    notesNumber: 'zdigit',
+    notesSize: 10,
+    notesPitch: 7.05,
+    notesGap: 8.5,
+    notesX: 24.9,
+    notesText: 31.0,
+    notesWrap: 31.0,
+    notesRight: 158.0,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は全部で○ページです。落丁・乱丁や印刷の不鮮明な箇所があれば，手を挙げて監督者に知らせなさい。',
+      '解答には，必ず黒色鉛筆（または黒色のシャープペンシル）を使いなさい。',
+      '解答用紙は2枚です。それぞれの解答用紙で解答する問題の番号を確かめなさい。',
+      '\\textbf{解答用紙の指定欄に，受験番号・科類・氏名を記入しなさい。指定欄以外に書いたものは無効になることがあります。}',
+      '\\textbf{解答は，解答用紙の指定された箇所に記入しなさい。}',
+      '\\textbf{解答に関係のない文字や記号を解答用紙に書いてはいけません。欄外の余白にも書かないこと。}',
+      '問題冊子の余白は計算に使ってかまいませんが，切り離してはいけません。',
+      '解答用紙を持ち帰ってはいけません。',
+      '試験が終わったら，問題冊子は持ち帰りなさい。'
+    ),
+    pageNumber: true,
+    firstPage: 3,
+  },
+  // 東京大学（理科）：「理　　　科」、日付と時刻、注意 13 項目を行送り 5.8mm で
+  'univ-tokyo-sci': {
+    header: '入　学　試　験　問　題',
+    headerFont: 'mincho',
+    headerSize: 22,
+    subject: '理　　　科',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '',
+    points: '（配点120点）',
+    pointsSize: 14,
+    time: '令和○年○月○日　9時30分―12時',
+    timeLabel: '',
+    timeSize: 14,
+    timeFont: 'mincho',
+    pos: { header: 38.0, subject: 51.7, points: 62.6, time: 74.6, notes: 86.6 },
+    notesTitle: '注　意　事　項',
+    notesTitleAlign: 'center',
+    notesTitleSize: 14,
+    notesNumber: 'zdigit',
+    notesSize: 10,
+    notesPitch: 5.8,
+    notesGap: 8.7,
+    notesX: 24.9,
+    notesText: 31.0,
+    notesWrap: 31.0,
+    notesRight: 158.0,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は全部で○ページで，科目ごとのページは次のとおりです。落丁・乱丁などがあれば手を挙げて知らせなさい。',
+      '解答には，必ず黒色鉛筆（または黒色のシャープペンシル）を使いなさい。',
+      '解答用紙は1科目につき1枚です。',
+      '出願時に届け出た2科目について解答しなさい。',
+      '\\textbf{解答用紙の指定欄に，受験番号などを記入しなさい。}',
+      '\\textbf{解答は，解答用紙の指定された箇所に記入しなさい。}',
+      '\\textbf{解答に関係のない文字や記号を解答用紙に書いてはいけません。}',
+      '解答用紙の上部にある科目名の欄に，解答した科目を示す印を付けなさい。',
+      '解答用紙の上部の切り取り欄は，解答した科目の分を1か所だけ切り取りなさい。',
+      '問題冊子の余白は草稿に使ってかまいませんが，切り離してはいけません。',
+      '解答用紙を持ち帰ってはいけません。',
+      '試験が終わったら，問題冊子は持ち帰りなさい。'
+    ),
+    pageNumber: true,
+    firstPage: 3,
+  },
+  // 京都大学（数学）：「令和○年度入学試験問題」（細いゴシック・約 16pt）、「数　　学（理系）」（明朝・約 24pt）、配点、
+  // 「(注　意)」を左に、注意 8 項目（1.・行送り 7.1mm・「，．」）。表紙にページ番号なし
+  'univ-kyoto': {
+    header: '令和○年度入学試験問題',
+    headerSize: 16,
+    subject: '数　　学',
+    subjectSize: 24,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    subtitle: '(理系)',
+    target: '',
+    points: '200点満点',
+    pointsSize: 10.5,
+    time: '≪学部ごとの配点は，学生募集要項を参照すること．≫',
+    timeLabel: '',
+    timeSize: 10.5,
+    timeFont: 'mincho',
+    pos: { header: 44.0, subject: 67.0, points: 87.4, time: 94.5, notes: 108.7 },
+    notesTitle: '(注　意)',
+    notesTitleX: 23.1,
+    notesNumber: 'dot',
+    notesSize: 10.5,
+    notesPitch: 7.1,
+    notesGap: 9.5,
+    notesX: 27.9,
+    notesText: 33.2,
+    notesWrap: 33.2,
+    notesRight: 156.5,
+    notes: NOTE(
+      '試験開始の合図があるまで，問題冊子と解答冊子を開かないこと。',
+      '解答冊子には，解答用のページ・計算用のページ・余白のページがある。',
+      '問題は全部で{n}題あり，問題冊子の○ページから○ページにある。',
+      '解答冊子の表紙に学部名・受験番号・氏名を記入し，それ以外のことは書かないこと。',
+      '\\underline{解答は，問題番号に対応する解答用のページに書くこと。}ほかのページに書いた解答は採点しない。隣の計算用のページを続きに使うときは，そのことをはっきり書くこと。',
+      '解答に関係のないことを書いた答案は無効にすることがある。下書きは消さなくてよい。',
+      '解答冊子は切り離さないこと。',
+      '問題冊子は持ち帰ってよいが，解答冊子は持ち帰らないこと。'
+    ),
+  },
+  // 京都大学（理科）：「理　　科」、各科目の配点、科目ごとのページ、注意 9 項目
+  'univ-kyoto-sci': {
+    header: '令和○年度入学試験問題',
+    headerSize: 16,
+    subject: '理　　科',
+    subjectSize: 24,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '物　理（○〜○ページ）　化　学（○〜○ページ）',
+    targetSize: 10.5,
+    points: '各科目 100点満点',
+    pointsSize: 10.5,
+    time: '',
+    pos: { header: 43.9, subject: 63.9, points: 81.3, target: 98.3, notes: 116.6 },
+    notesTitle: '(注　意)',
+    notesTitleX: 23.1,
+    notesNumber: 'dot',
+    notesSize: 10.5,
+    notesPitch: 6.7,
+    notesGap: 8.5,
+    notesX: 27.5,
+    notesText: 32.8,
+    notesWrap: 32.8,
+    notesRight: 156.5,
+    notes: NOTE(
+      '試験開始の合図があるまで，問題冊子と解答冊子を開かないこと。',
+      '問題冊子は表紙のほかに○ページある。',
+      '各科目の大問の数は，問題冊子の各科目の最初のページに示してある。',
+      '解答冊子の表紙に学部名・受験番号・氏名を記入すること。',
+      '解答する科目は，志望する学部の指定に従うこと。',
+      '解答は，解答冊子の指定された箇所に書くこと。',
+      '解答に関係のないことを書いた答案は無効にすることがある。',
+      '解答冊子は切り離さないこと。',
+      '問題冊子は持ち帰ってよいが，解答冊子は持ち帰らないこと。'
+    ),
+  },
+  // 東北大学（数学）：「令和○年度前期日程入学試験学力検査問題」（明朝 14pt）と日付、「数　　　学〔理系〕」（太ゴシック 22pt）。
+  // 実物はこの下に志望学部と試験時間の表がある（ここでは試験時間の行で代用）。「注　意　事　項」と注意 7 項目（1．）。表紙に「―1―」、2 ページ目は白紙
+  'univ-tohoku': {
+    header: '令和○年度前期日程入学試験学力検査問題|令和○年○月○日',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '数　　　学',
+    subjectSize: 22,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    subtitle: '〔理系〕',
+    target: '',
+    time: '10時〜12時30分（150分）',
+    timeLabel: '試験時間',
+    timeSize: 10.5,
+    pos: { header: 32.6, subject: 56.2, time: 100.0, notes: 140.9 },
+    notesTitle: '注　意　事　項',
+    notesTitleX: 31.0,
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 7.05,
+    notesX: 25.7,
+    notesText: 31.0,
+    notesWrap: 27.5,
+    notesRight: 157.8,
+    notes: NOTE(
+      '\\textbf{試験開始の合図があるまで，問題冊子と解答用紙を開いてはいけません。}',
+      '問題冊子は○ページです。白紙のページや余白は下書きに使ってかまいません。ページの抜けなどがあれば申し出なさい。',
+      '解答には黒鉛筆（シャープペンシルも可）を使いなさい。ボールペンなどは使えません。',
+      '\\textbf{解答用紙の受験記号番号の欄（1枚につき2か所）に，受験票と同じ番号をはっきり記入しなさい。}',
+      '解答は，解答用紙の指定された箇所に記入しなさい。',
+      '\\textbf{解答用紙を持ち帰ってはいけません。}',
+      '問題冊子は持ち帰りなさい。'
+    ),
+    pageNumber: true,
+    firstPage: 3,
+  },
+  'univ-tohoku-sci': {
+    header: '令和○年度前期日程入学試験学力検査問題|令和○年○月○日',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '理　　　科',
+    subjectSize: 22,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    target: '物理 ○〜○ページ　化学 ○〜○ページ　生物 ○〜○ページ',
+    targetSize: 10,
+    time: '',
+    pos: { header: 32.6, subject: 56.2, target: 75.0, notes: 146.2 },
+    notesTitle: '注　意　事　項',
+    notesTitleX: 31.4,
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 6.9,
+    notesX: 25.7,
+    notesText: 31.4,
+    notesWrap: 27.9,
+    notesRight: 158.0,
+    notes: NOTE(
+      '\\textbf{試験開始の合図があるまで，問題冊子と解答用紙を開いてはいけません。}',
+      '問題冊子の留め具を外したり，ページを切り離したりしてはいけません。白紙のページや余白は下書きに使ってかまいません。',
+      '解答には黒鉛筆（シャープペンシルも可）を使いなさい。',
+      '\\textbf{解答用紙の受験記号番号の欄に，受験票と同じ番号をはっきり記入しなさい。}',
+      '解答は，選択した科目の解答用紙の指定された箇所に記入しなさい。',
+      '\\textbf{解答用紙を持ち帰ってはいけません。}',
+      '問題冊子は持ち帰りなさい。'
+    ),
+    pageNumber: true,
+    firstPage: 3,
+  },
+  // 九州大学（数学）：「令和○年度入学試験問題」（明朝 14pt）、「数　　学」（ゴシック太字 24pt）と右に科目、「(注意事項)」、
+  // 注意 6 項目（1.・項目の中は 5.5mm、項目の間に約 1 行）。表紙にページ番号なし
+  'univ-kyushu': {
+    header: '令和○年度入学試験問題',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '数　　学',
+    subjectSize: 24,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    subtitle: '数学Ⅰ・Ⅱ・Ⅲ・A・B・C',
+    target: '',
+    time: '',
+    pos: { header: 35.4, subject: 62.7, notes: 90.9 },
+    notesTitle: '(注意事項)',
+    notesTitleX: 29.1,
+    notesNumber: 'dot',
+    notesSize: 10.5,
+    notesPitch: 5.5,
+    notesItemGap: 3.4,
+    notesGap: 8.6,
+    notesX: 33.3,
+    notesText: 38.3,
+    notesWrap: 38.3,
+    notesRight: 158.2,
+    notes: NOTE(
+      '試験開始の合図があるまで，問題冊子と解答紙の中を見てはいけません。',
+      '問題冊子は○ページで，解答紙は○枚（番号○〜○）がはさんであります。',
+      '試験開始後，ページ数と解答紙の番号を確かめなさい。落丁や不足があれば手を挙げなさい。',
+      '各解答紙の2か所に受験番号を記入しなさい。数字は裏面の記入例のとおり，ます目に書きなさい。',
+      '解答は解答紙の表に記入し，小問の番号をはっきり書きなさい。裏面に書いてはいけません。',
+      '満点と，学科によって配点を換算することは，学生募集要項のとおりです。'
+    ),
+  },
+  'univ-kyushu-sci': {
+    header: '令和○年度入学試験問題',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '理　　　科',
+    subjectSize: 21,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    target: '',
+    time: '',
+    pos: { header: 35.4, subject: 64.6, notes: 88.1 },
+    notesTitle: '（注　意　事　項）',
+    notesTitleX: 22.2,
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 7.0,
+    notesX: 29.2,
+    notesText: 34.5,
+    notesWrap: 31.0,
+    notesRight: 157.0,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '出願時に届け出た科目以外の問題に解答してはいけません。',
+      '各科目の問題のページと解答紙の番号は次の表のとおりです。試験開始後に確かめ，各科目の表紙の注意も読みなさい。',
+      '|科　目|問題冊子のページ|解答紙の番号|枚　数',
+      '|物　理|○〜○|○〜○|○',
+      '|化　学|○〜○|○〜○|○',
+      '各解答紙の2か所に受験番号を記入しなさい。',
+      '数字は裏面の記入例のとおり，ます目に書きなさい。',
+      '解答は，解答紙の所定の欄に記入しなさい。',
+      '計算には，解答紙の裏面か問題冊子の余白を使いなさい。',
+      '満点と配点の換算は，学生募集要項のとおりです。'
+    ),
+  },
+  // 北海道大学（数学）：A4。「数　　学」（ゴシック太字 22pt）、科目（ゴシック太字 14pt）、時刻、枠で囲んだ「注　　意」9 項目。表紙に「― 1 ―」
+  'univ-hokudai': {
+    header: '',
+    subject: '数　　学',
+    subjectSize: 22,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    target: '（数Ⅰ，数Ⅱ，数Ⅲ，数A，数B，数C）',
+    targetSize: 14,
+    time: '9：00～11：00',
+    timeLabel: '',
+    timeSize: 10,
+    timeFont: 'mincho',
+    pos: { subject: 70.4, target: 80.5, time: 93.0, notes: 104.0 },
+    notesTitle: '注　　意',
+    notesFrame: true,
+    notesSize: 10.5,
+    notesPitch: 7.1,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題は○ページあります。',
+      '解答用紙は5枚あります。各解答用紙で解答する問題の番号を確かめなさい。',
+      '解答用紙は5枚ともすべて提出しなさい。',
+      '\\textbf{受験番号と座席番号を，監督者の指示に従って，すべての解答用紙の上下2か所に記入しなさい。}',
+      '各問の解答は指定された解答用紙に記入し，裏面は使わないこと。',
+      '解答用紙には解答に必要なこと以外を書いてはいけません。',
+      '問題冊子の余白は下書きに使ってかまいません。',
+      '下書き用紙は回収しません。'
+    ),
+    pageNumber: true,
+  },
+  'univ-hokudai-sci': {
+    header: '',
+    subject: '理　　科',
+    subjectSize: 22,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    target: '',
+    time: '15：00～17：30',
+    timeLabel: '',
+    timeSize: 10,
+    timeFont: 'mincho',
+    pos: { subject: 71.0, time: 91.4, notes: 106.0 },
+    notesTitle: '解答上の注意',
+    notesFrame: true,
+    notesSize: 10.5,
+    notesPitch: 5.9,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は○ページで，科目ごとのページは次のとおりです。',
+      '出願時に届け出た2科目について解答しなさい。学部ごとの必須科目（◎）と選択科目（○）は次のとおりです。',
+      '|学　部|物理|化学|生物|地学',
+      '|○○学部|◎|◎| | ',
+      '\\textbf{受験番号と座席番号を，すべての解答用紙に記入しなさい。}',
+      '解答は，解答用紙の指定された欄に記入しなさい。',
+      '解答用紙には解答に必要なこと以外を書いてはいけません。',
+      '問題冊子の余白は下書きに使ってかまいません。',
+      '下書き用紙は回収しません。'
+    ),
+    pageNumber: true,
+  },
+  // 東京科学大学（数学）：右上に「（令和○年度前期日程）」、「数　　　学」（明朝 24pt）、試験時間、「注　意　事　項」と 6 項目（1．）。
+  // 表紙にページ番号なし。実物は 2 ページ目に「試験問題は，つぎのページより始まります。」
+  'univ-isct': {
+    header: '（令和○年度前期日程）',
+    headerAlign: 'right',
+    headerFont: 'mincho',
+    headerSize: 10,
+    subject: '数　　　学',
+    subjectSize: 24,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '',
+    time: '180　分',
+    timeLabel: '',
+    timeSize: 14,
+    timeFont: 'mincho',
+    pos: { header: 31.3, subject: 57.9, time: 77.0, notes: 116.0 },
+    notesTitle: '注　意　事　項',
+    notesTitleX: 24.0,
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 7.05,
+    notesX: 29.3,
+    notesText: 34.5,
+    notesWrap: 31.0,
+    notesRight: 157.6,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は○ページ，解答用紙は○枚です。',
+      '解答用紙の上の枠に\\textbf{受験番号}を，下の枠に受験番号の\\textbf{下2桁}を記入しなさい。',
+      '解答は，解答用紙の枠の中にはっきり書きなさい。裏面に書いたものは採点しません。',
+      '問題冊子と解答用紙は切り離してはいけません。',
+      '受験番号の数字は，見本の字体にならって書きなさい。'
+    ),
+  },
+  'univ-isct-phys': {
+    header: '（令和○年度前期日程）',
+    headerAlign: 'right',
+    headerFont: 'mincho',
+    headerSize: 10,
+    subject: '物　　　理',
+    subjectSize: 24,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '',
+    time: '120　分',
+    timeLabel: '',
+    timeSize: 14,
+    timeFont: 'mincho',
+    pos: { header: 31.3, subject: 57.9, time: 77.0, notes: 116.0 },
+    notesTitle: '注　意　事　項',
+    notesTitleX: 24.0,
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 7.05,
+    notesX: 29.3,
+    notesText: 34.5,
+    notesWrap: 31.0,
+    notesRight: 157.6,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は○ページ，解答用紙は○枚です。',
+      '解答用紙の上の枠に\\textbf{受験番号}を，下の枠に受験番号の\\textbf{下2桁}を記入しなさい。',
+      '解答は，解答用紙の枠の中にはっきり書きなさい。裏面に書いたものは採点しません。',
+      '導出の欄には，答えに至る過程を書きなさい。図を使ってもかまいません。',
+      '問題冊子と解答用紙は切り離してはいけません。',
+      '受験番号の数字は，見本の字体にならって書きなさい。'
+    ),
+  },
+  'univ-isct-chem': {
+    header: '（令和○年度前期日程）',
+    headerAlign: 'right',
+    headerFont: 'mincho',
+    headerSize: 10,
+    subject: '化　　　学',
+    subjectSize: 24,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '',
+    time: '120　分',
+    timeLabel: '',
+    timeSize: 14,
+    timeFont: 'mincho',
+    pos: { header: 31.3, subject: 57.9, time: 77.0, notes: 116.0 },
+    notesTitle: '注　意　事　項',
+    notesTitleX: 24.0,
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 7.05,
+    notesX: 29.3,
+    notesText: 34.5,
+    notesWrap: 31.0,
+    notesRight: 157.6,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は○ページ，解答用紙は○枚です。',
+      '解答用紙の右上の枠に\\textbf{受験番号}を，左上の枠に受験番号の\\textbf{下2桁}を記入しなさい。',
+      '解答は，解答用紙の枠の中にはっきり書きなさい。',
+      '問題冊子と解答用紙は切り離してはいけません。',
+      '受験番号の数字は，見本の字体にならって書きなさい。',
+      '解答のしかたは裏表紙に書いてあります。問題冊子を開かずに，裏返して読みなさい。'
+    ),
+  },
+  // 一橋大学：「数　　　　学」（明朝 22pt）、その下に「令和○年度（前期）」（ゴシック 14pt）、中央に「注　　　　　意」、6 項目（全角数字．）
+  'univ-hitotsubashi': {
+    header: '',
+    subject: '数　　　　学',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '令和○年度（前期）',
+    targetSize: 14,
+    time: '',
+    pos: { subject: 53.8, target: 70.4, notes: 84.0 },
+    notesTitle: '注　　　　　意',
+    notesTitleAlign: 'center',
+    notesNumber: 'zdot',
+    notesSize: 10,
+    notesPitch: 7.05,
+    notesX: 25.2,
+    notesText: 31.0,
+    notesWrap: 31.0,
+    notesRight: 154.1,
+    notes: NOTE(
+      '「解答はじめ」の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題冊子は1冊で，本文○ページと白紙○ページがあります。解答用紙は○枚です。白紙は抜き取って下書きに使ってかまいません。',
+      'すべての解答用紙に，受験番号を例のとおり記入しなさい。',
+      '解答は，解答用紙の所定の位置に記入しなさい。ほかの場所に書いたものは無効になることがあります。',
+      '書き損じても，解答用紙の取り替えはしません。',
+      '試験が終わったら，問題冊子と白紙は持ち帰りなさい。'
+    ),
+  },
+  // 神戸大学：左上に「（令○前）」、「数　　　学」（明朝太字 22pt）、「（理　科　系）」、ページの範囲、白紙の使い方と注意を 1 文ずつ、科目の配点。
+  // 番号付きの注意事項はない
+  'univ-kobe': {
+    header: '（令 ○ 前）',
+    headerAlign: 'left',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '数　　　学',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: true,
+    target: '（理　科　系）',
+    targetSize: 14,
+    time: '（1～○ ページ）',
+    timeLabel: '',
+    timeSize: 10,
+    timeFont: 'mincho',
+    points: '数　学（理科系）　150 点',
+    pointsSize: 10,
+    pos: { header: 49.8, subject: 50.8, target: 67.3, time: 80.8, notes: 101.8, points: 136.8 },
+    notesTitle: '',
+    notesNumber: 'none',
+    notesSize: 10,
+    notesPitch: 7.0,
+    notesItemGap: 7.0,
+    notesX: 30.6,
+    notesText: 30.6,
+    notesWrap: 30.6,
+    notes: NOTE('・問題冊子の白紙のページは下書きに使ってかまいません。', '\\textbf{注意}　解答は，すべて解答用紙の指定された箇所に記入しなさい。'),
+  },
+  // 慶應義塾大学（理工）：A4。年度と「入学試験問題」（明朝太字）、「理　工　学　部」、「数　　学」（明朝太字 29pt）、
+  // 下の方に「注　意」と 6 項目（1.・ゴシック・行送り 10.6mm）。表紙に「― 1 ―」。校章は入れていない
+  'univ-keio': {
+    header: '20○○年度|入学試験問題',
+    headerFont: 'mincho',
+    headerSize: 18,
+    subject: '数　　学',
+    subjectSize: 29,
+    subjectFont: 'mincho',
+    subjectBold: true,
+    target: '理　工　学　部',
+    targetSize: 21,
+    time: '',
+    pos: { header: 57.8, subject: 119.5, target: 98.0, notes: 176.9 },
+    notesTitle: '注　意',
+    notesTitleX: 30.6,
+    notesGap: 0,
+    notesNumber: 'dot',
+    notesSize: 10.5,
+    notesPitch: 10.6,
+    notesX: 44.7,
+    notesText: 51.7,
+    notesWrap: 51.7,
+    notesRight: 182.0,
+    notes: NOTE(
+      '解答用紙の所定の欄に，氏名と受験番号を記入しなさい。',
+      '解答は解答用紙の所定の欄に，\\underline{読みやすく丁寧に}書きなさい。',
+      '\\underline{解答用紙の余白や裏面には何も書いてはいけません。}',
+      '問題冊子は○ページで，そのうち○ページは余白です。',
+      '問題冊子の余白は計算や下書きに使ってかまいません。',
+      '問題冊子は必ず持ち帰りなさい。'
+    ),
+    pageNumber: true,
+  },
+  // 早稲田大学：枠の中に「数　学」（明朝 21pt）・「（問　題）」・年度、「注　意　事　項」、11 項目（9.5pt・行送り 4.85mm）。表紙に「— 1 —」
+  'univ-waseda': {
+    header: '20○○年度',
+    headerFont: 'mincho',
+    headerSize: 12,
+    subject: '数　学',
+    subjectSize: 21,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '（問　題）',
+    targetSize: 14,
+    time: '',
+    pos: { subject: 61.0, target: 74.0, header: 84.0, notes: 109.0 },
+    notesTitle: '注　意　事　項',
+    notesTitleAlign: 'center',
+    notesNumber: 'dot',
+    notesSize: 9.5,
+    notesPitch: 4.85,
+    notesGap: 7.0,
+    notesX: 23.2,
+    notesText: 29.3,
+    notesWrap: 29.3,
+    notesRight: 158.0,
+    notes: NOTE(
+      'この問題冊子のほかに，解答用紙が3枚あります。',
+      '試験開始の指示があるまで，問題冊子と解答用紙に手を触れてはいけません。',
+      '問題は○ページから○ページにあります。印刷の不鮮明な箇所などがあれば申し出なさい。',
+      '解答にはHBの黒鉛筆を使いなさい。',
+      '受験番号と氏名を，各解答用紙の2か所に記入しなさい。ほかの箇所に書いてはいけません。数字は見本の字体で書きなさい。',
+      '解答は，解答用紙の指定された枠の中に書きなさい。',
+      '文字ははっきりと読みやすく書きなさい。',
+      '問題冊子の余白は計算に使ってかまいませんが，ページを切り離してはいけません。',
+      '試験終了の合図があったら，すぐに書くのをやめて解答用紙を裏返しなさい。',
+      '解答用紙はすべて提出しなさい。',
+      '問題冊子は持ち帰ってかまいません。'
+    ),
+    pageNumber: true,
+    firstPage: 4,
+  },
+  // 広島大学：「令和○年度入学試験問題」、「数　学」、科目、時刻、枠で囲んだ「答案作成上の注意」7 項目。表紙に「— 1 —」、問題は 4 ページから
+  'univ-hiroshima': {
+    header: '令和○年度入学試験問題',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '数　学',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '数学Ⅰ・数学Ⅱ・数学Ⅲ・数学A・数学B・数学C',
+    targetSize: 14,
+    time: '自　○時○分　　至　○時○分',
+    timeLabel: '',
+    timeSize: 10,
+    timeFont: 'mincho',
+    pos: { header: 41.0, subject: 57.0, target: 76.0, time: 100.0, notes: 118.0 },
+    notesTitle: '答案作成上の注意',
+    notesFrame: true,
+    notesSize: 10,
+    notesPitch: 7.0,
+    notes: NOTE(
+      '問題は{n}題で，問題冊子は○ページです。問題は4ページから偶数ページにあります。',
+      '解答用紙は{n}枚です。問題番号と同じ番号の解答用紙に解答しなさい。',
+      '各解答用紙の2か所に受験番号を記入しなさい。',
+      '試験が終わったら，解答用紙を番号順に並べなさい。',
+      '解答用紙を持ち帰ってはいけません。',
+      '問題冊子は持ち帰りなさい。',
+      '机の上に置いてよいものは，裏表紙に書いてあります。'
+    ),
+    pageNumber: true,
+    firstPage: 4,
+  },
+  // 千葉大学：「令和○年度入学者選抜学力検査問題」、「数　学」（ゴシック太字）、「注　意　事　項」と 10 項目。裏表紙に問題の選択の表
+  'univ-chiba': {
+    header: '令和○年度入学者選抜学力検査問題',
+    headerSize: 15,
+    subject: '数　学',
+    subjectSize: 22,
+    subjectFont: 'gothic',
+    subjectBold: true,
+    target: '',
+    time: '',
+    pos: { header: 59.5, subject: 79.0, notes: 105.0 },
+    notesTitle: '注　意　事　項',
+    notesTitleX: 26.1,
+    notesNumber: 'dot',
+    notesSize: 10.5,
+    notesPitch: 5.1,
+    notesItemGap: 1.7,
+    notesGap: 7.0,
+    notesX: 27.0,
+    notesText: 32.3,
+    notesWrap: 32.3,
+    notesRight: 155.7,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '解答する問題は志望する学部・学科によって異なります。裏表紙の表で確かめなさい。',
+      '受験番号と座席番号を，解答用紙の所定の欄に記入しなさい。',
+      '解答は，問題ごとに別々の解答用紙に記入しなさい。',
+      '解答用紙の裏面には何も書いてはいけません。',
+      '答えだけでなく，考え方や計算の過程も書きなさい。',
+      '問題冊子は○ページです。落丁や印刷の不鮮明な箇所があれば申し出なさい。',
+      '問題冊子の余白は下書きに使ってかまいません。',
+      '解答用紙を持ち帰ってはいけません。',
+      '問題冊子は持ち帰りなさい。'
+    ),
+    backTitle: '問題の選択に関する注意',
+    backNotes: NOTE('志望する学部・学科ごとに，解答する問題は次の表のとおりです。', '|学部・学科|解答する問題', '|○○学部○○学科|1，2，3，4', '|○○学部○○学科|1，2，5，6'),
+  },
+  // 東京理科大学：左上に年度、右上に試験時間、「数　　学」（明朝太字 22pt）、「〔注　意〕」と ⑴〜⑺。表紙に「— 1 —」、問題は 4 ページから
+  'univ-tus': {
+    header: '20○○年度',
+    headerAlign: 'left',
+    headerFont: 'mincho',
+    headerSize: 10,
+    subject: '数　　学',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: true,
+    target: 'この問題冊子には，数学の問題（1〜○ページ）が入っています。',
+    targetSize: 10,
+    time: '〔試験時間　100 分〕',
+    timeLabel: '',
+    timeSize: 10,
+    timeFont: 'mincho',
+    timeAlign: 'right',
+    pos: { header: 31.3, time: 31.3, subject: 43.5, target: 57.9, notes: 73.7 },
+    notesTitle: '〔注　意〕',
+    notesTitleAlign: 'center',
+    notesNumber: 'pparen',
+    notesSize: 10,
+    notesPitch: 6.45,
+    notesX: 24.0,
+    notesText: 27.5,
+    notesWrap: 27.5,
+    notesRight: 156.0,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '解答用紙に受験番号と氏名を記入し，マークシートには受験番号をマークしなさい。',
+      '指定された解答用紙に書いたものだけを採点します。',
+      'マークシートは汚したり折り曲げたりしないこと。HB または B の鉛筆で，1 行に 1 つだけはっきりマークし，訂正するときは消しゴムできれいに消しなさい。',
+      '試験開始後，ページ数を確かめなさい。落丁などがあれば申し出なさい。',
+      '計算には下書き用紙や問題冊子の余白を使いなさい。',
+      '問題冊子は持ち帰りなさい。'
+    ),
+    pageNumber: true,
+    firstPage: 4,
+  },
+  // 熊本大学：A4。左上に年度と試験名、「数　学　②」、科目、試験時間、「注意事項」と 7 項目
+  'univ-kumamoto': {
+    header: '令和○年度（前期日程）|入学者選抜学力検査問題',
+    headerAlign: 'left',
+    headerFont: 'mincho',
+    headerSize: 9.5,
+    subject: '数　学　②',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '数学Ⅰ・数学Ⅱ・数学Ⅲ・数学A・数学B・数学C',
+    targetSize: 12,
+    time: '120分',
+    timeLabel: '試験時間',
+    timeSize: 13,
+    timeFont: 'mincho',
+    pos: { header: 30.0, subject: 69.0, target: 88.0, time: 100.0, notes: 161.0 },
+    notesTitle: '注意事項',
+    notesTitleX: 32.5,
+    notesNumber: 'dot',
+    notesSize: 10,
+    notesPitch: 6.7,
+    notesX: 37.5,
+    notesText: 42.6,
+    notesWrap: 42.6,
+    notesRight: 177.0,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '\\textbf{各解答用紙の2か所に受験番号を記入しなさい。}',
+      '解答は指定された解答用紙に記入し，裏面は使わないこと。',
+      '落丁や印刷の不鮮明な箇所があれば，手を挙げて知らせなさい。',
+      '問題冊子の余白は下書きに使ってかまいません。',
+      '解答用紙を持ち帰ってはいけません。',
+      '問題冊子は持ち帰りなさい。'
+    ),
+  },
+  // 岡山大学：「20○○年度入学試験問題」、「数　学」、科目、「注　意」と 5 項目
+  'univ-okayama': {
+    header: '20○○年度入学試験問題',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '数　学',
+    subjectSize: 22,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '（数学Ⅰ・数学Ⅱ・数学Ⅲ・数学Ａ・数学Ｂ・数学Ｃ）',
+    targetSize: 12,
+    time: '',
+    pos: { header: 43.0, subject: 86.0, target: 102.0, notes: 151.0 },
+    notesTitle: '注　意',
+    notesTitleAlign: 'center',
+    notesNumber: 'dot',
+    notesSize: 10,
+    notesPitch: 7.0,
+    notesX: 28.5,
+    notesText: 34.8,
+    notesWrap: 31.3,
+    notesRight: 155.6,
+    notes: NOTE(
+      'この問題冊子は1冊（○ページ）で，解答用紙は○枚，下書き用紙は○枚です。',
+      '落丁や印刷の不鮮明な箇所があれば申し出なさい。',
+      'すべての解答用紙の2か所に受験番号を記入しなさい。',
+      '解答は指定された解答用紙に記入し，裏面は使わないこと。答えに至る過程も書きなさい。',
+      '問題冊子と下書き用紙は持ち帰りなさい。'
+    ),
+  },
+  // 金沢大学：「令和○年度入学者選抜学力検査問題」「（前期日程）」、「数　学」、「（注　意）」と 5 項目
+  'univ-kanazawa': {
+    header: '令和○年度入学者選抜学力検査問題|（前期日程）',
+    headerFont: 'mincho',
+    headerSize: 14,
+    subject: '数　学',
+    subjectSize: 21,
+    subjectFont: 'mincho',
+    subjectBold: false,
+    target: '',
+    time: '',
+    pos: { header: 35.5, subject: 62.0, notes: 190.0 },
+    notesTitle: '（注　意）',
+    notesTitleX: 31.2,
+    notesNumber: 'dot',
+    notesSize: 10,
+    notesPitch: 6.45,
+    notesX: 36.3,
+    notesText: 41.7,
+    notesWrap: 41.7,
+    notesRight: 154.1,
+    notes: NOTE(
+      '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+      '問題は○ページで，解答用紙は○枚です。',
+      '解答は，問題番号と同じ番号の解答用紙に記入しなさい。',
+      '解答用紙の網かけの部分と裏面には何も書いてはいけません。',
+      '問題冊子と下書き用紙は持ち帰りなさい。'
+    ),
+  },
+};
+// 理科の冊子の表紙（物理・化学のテーマで共通）
+const SCI_COVER = {
+  'univ-tokyo-phys': 'univ-tokyo-sci',
+  'univ-tokyo-chem': 'univ-tokyo-sci',
+  'univ-kyoto-phys': 'univ-kyoto-sci',
+  'univ-kyoto-chem': 'univ-kyoto-sci',
+  'univ-tohoku-phys': 'univ-tohoku-sci',
+  'univ-tohoku-chem': 'univ-tohoku-sci',
+  'univ-kyushu-phys': 'univ-kyushu-sci',
+  'univ-kyushu-chem': 'univ-kyushu-sci',
+  'univ-hokudai-phys': 'univ-hokudai-sci',
+  'univ-hokudai-chem': 'univ-hokudai-sci',
+};
+for (const t of UNIVERSITY_THEMES) {
+  const c = COVERS[t.id] || COVERS[SCI_COVER[t.id]];
+  if (c) t.meta.cover = { enabled: true, idField: false, footer: '', ...c };
+}
+
 /** 調査したが体裁を確認できなかった大学（テーマは作っていない） */
 export const UNVERIFIED_UNIVERSITIES = [
-  { name: '早稲田大学', reason: '公式サイトの問題 PDF を自動取得できず、体裁を確認できていません。' },
-  { name: '大阪大学', reason: '公式サイトに問題冊子が公開されておらず（解答例・出題の意図のみ）、確認できていません。' },
+  { name: '大阪大学', reason: '公式サイトには令和 8 年度の解答例・出題の意図だけが公開されていて、問題冊子は公開されていません。' },
+  { name: '筑波大学', reason: '前期日程の問題は出版社に提供されていて公式サイトには載っておらず（後期・推薦などのみ）、確認できていません。' },
+  { name: '横浜国立大学', reason: '過去問題はログインが必要なサイトか入試課での閲覧のみで、公開 PDF がありません。' },
+  { name: '名古屋大学（表紙）', reason: '公開 PDF に表紙のページが含まれていないため、表紙は付けていません（本文の体裁はテーマにあります）。' },
 ];
+

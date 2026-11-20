@@ -322,5 +322,23 @@ export function initLayoutPanel(deps) {
     if (e.key === 'Escape') close();
   });
 
+  // 設定ダイアログの表紙の追加項目（組み方・配点・科目名の右の文字・裏表紙）。「OK」で表紙の設定に書き戻す
+  // （表示は設定ダイアログを開くときに表紙の値から入る）
+  const settingsForm = $('#settings-form');
+  settingsForm?.addEventListener('submit', () => {
+    const cover = doc().meta.cover || {};
+    let changed = false;
+    for (const el of $$('[data-cover-extra]', settingsForm)) {
+      const k = el.name.replace(/^cover\./, '');
+      const v = el.type === 'checkbox' ? el.checked : el.value;
+      if (cover[k] !== v && !(cover[k] == null && v === '')) {
+        cover[k] = v;
+        changed = true;
+      }
+    }
+    doc().meta.cover = cover;
+    if (changed) deps.onChange();
+  });
+
   return { open };
 }

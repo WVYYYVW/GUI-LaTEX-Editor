@@ -2,9 +2,9 @@
 import katex from 'katex';
 import { SCIENCE_MACROS, normalizeNumbers } from './chem.js'; // \ce{…}（化学式, mhchem）・単位のマクロ
 import { findMathRanges, maskComments } from './mathRanges.js';
-import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins } from './layout.js';
+import { normalizeLayout, paperSize, headNumberHtml, headStyleCss, bodyPt, pointsText, applyPunct, pageMargins, defaultCover, coverPositions, COVER_NUMBERS } from './layout.js';
 import { findFigures, figureToSvg } from './figure.js';
-import { coverNotes } from './texExport.js';
+import { coverNotes, coverNoteItems, coverNotesGeometry } from './texExport.js';
 import { naturalToLatex } from './natural.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -95,13 +95,15 @@ function textToHtml(s) {
   });
   // 大問の中の「部」（\Part, \Part[A]）は新しい段落にする。番号の形はプリント全体の CSS（part-…）で決まる
   s = s.replace(/\\Part(?![a-zA-Z])\s*(?:\[([^\]]*)\])?/g, (_m, lab) => `\n\n\u0006P${lab == null ? '' : encodeURIComponent(lab)}\u0006`);
-  // 空欄 \blank{ア}
-  for (let k = 0; k < 3; k++) s = s.replace(/\\blank\s*\{([^{}]*)\}/g, (_m, t) => `\u0006B${t}\u0007`);
+  // 空欄 \blank{ア}。\blank*{コ} は二重の枠（選択肢から選ぶ空欄）、\blank[2]{ア} は 2 度目以降（細い枠）
+  for (let k = 0; k < 3; k++) {
+    s = s.replace(/\\blank(\*?)\s*(?:\[([^\]]*)\])?\s*\{([^{}]*)\}/g, (_m, st, opt, t) => `\u0006B${st ? 'd' : ''}${(opt || '').trim() === '2' ? 't' : ''}\u0008${t}\u0007`);
+  }
 
   s = esc(s);
   s = s
     .replace(/\u0006P([^\u0006]*)\u0006/g, (_m, lab) => `<span class="pv-part"${lab ? ` data-label="${esc(decodeURIComponent(lab))}"` : ''}></span>`)
-    .replace(/\u0006B([^\u0007]*)\u0007/g, '<span class="pv-blank">$1</span>');
+    .replace(/\u0006B([dt]*)\u0008([^\u0007]*)\u0007/g, (_m, f, t) => `<span class="pv-blank${f.includes('d') ? ' dbl' : ''}${f.includes('t') ? ' again' : ''}">${t}</span>`);
   // エスケープ文字
   s = s
     .replace(/\\\{/g, '&#123;')
@@ -214,7 +216,19 @@ function textToHtml(s) {
     .split(/\n[ \t]*\n+/)
     .map((p) => p.replace(/\n/g, ' ').trim())
     .filter(Boolean);
-  html = paras.map((p) => `<div class="pv-par">${p}</div>`).join('');
+  // 部（\Part）から次の部までを 1 つのまとまりにする（部の中身全体を字下げするテーマで使う）
+  let partOpen = false;
+  html =
+    paras
+      .map((p) => {
+        let pre = '';
+        if (p.startsWith('<span class="pv-part"')) {
+          pre = `${partOpen ? '</div>' : ''}<div class="pv-partbody">`;
+          partOpen = true;
+        }
+        return `${pre}<div class="pv-par">${p}</div>`;
+      })
+      .join('') + (partOpen ? '</div>' : '');
 
   return html
     .replace(/\u0003TIKZ\u0003/g, '<div class="pv-placeholder">TikZ の図（PDF 出力で表示されます）</div>')
@@ -321,14 +335,55 @@ export function contentStyle(layout) {
     `sub-${l.subLabel}`,
     l.sub.paren === 'full' ? 'sub-full' : '',
     `part-${pa.style}`,
-    pa.align === 'center' ? 'part-center' : pa.inline ? 'part-inline' : '',
+    pa.hang ? 'part-hang' : pa.align === 'center' ? 'part-center' : pa.inline ? 'part-inline' : '',
     `blank-${bl.style}`,
+    l.sub2?.label ? `sub2-${l.sub2.label}` : '',
+    l.sub2?.label && l.sub2.wrap === 'left' ? 'sub2-wrapleft' : '',
   ].filter(Boolean);
+  const s2 = l.sub2 || {};
   const vars =
     `--part-font:${pa.font === 'mincho' ? 'var(--serif)' : 'var(--sans)'};--part-weight:${pa.bold ? 700 : 400};--part-size:${Number(pa.size) > 0 ? `${Number(pa.size)}pt` : '1em'}` +
     `;--part-indent:${Number(pa.indent) || 0}mm;--part-gap:${Number(pa.gap) || 0}mm;--part-sb:${Number(pa.spaceBefore) || 0}mm;--part-sa:${Number(pa.spaceAfter) || 0}mm` +
-    `;--blank-w:${Number(bl.width) || 0}mm${Number(bl.height) > 0 ? `;--blank-h:${Number(bl.height)}mm` : ''}`;
+    `;--part-body:${Number(pa.bodyIndent) || 0}mm` +
+    `;--blank-w:${Number(bl.width) || 0}mm${Number(bl.height) > 0 ? `;--blank-h:${Number(bl.height)}mm` : ''}` +
+    (s2.label ? `;--sub2-indent:${Number(s2.indent) || 0}mm;--sub2-sep:${Number(s2.sep) || 0}mm;--sub2-gap:${Number(s2.gap) || 0}mm;--sub2-wrap:${Number(s2.wrapIndent) || 0}mm` : '');
   return { classes, vars };
+}
+
+/** ページ上部に小さく入れる文字の書体・大きさ */
+function runheadStyle(l) {
+  const css = [];
+  if (Number(l.headerSize) > 0) css.push(`font-size:${Number(l.headerSize)}pt`);
+  if (l.headerFont === 'gothic') css.push('font-family:var(--sans);color:inherit');
+  return css.length ? ` style="${css.join(';')}"` : '';
+}
+
+/**
+ * 1 ページ目に大きく入れる見出し。title.size を指定したテーマでは、見出し・小さな行・最初の大問の見出しを
+ * PDF と同じベースライン（用紙の上端から mm）に近づけて置く
+ */
+function titleHtml(l, top, head) {
+  const t = l.title || {};
+  if (!(Number(t.size) > 0)) return `<div class="sh-titlehead">${esc(l.header)}</div>`;
+  const mm = (pt) => pt * PT_MM;
+  const fam = t.font === 'mincho' ? 'var(--serif)' : 'var(--sans)';
+  const sz = Number(t.size);
+  const B = Number(t.baseline) > 0 ? Number(t.baseline) : top + 8;
+  let h = `<div class="sh-titlehead sized" style="font-family:${fam};font-weight:${t.bold ? 700 : 400};font-size:${sz}pt;line-height:1;margin:${Math.max(0, B - top - 0.88 * mm(sz)).toFixed(2)}mm 0 0">${esc(l.header)}</div>`;
+  let last = B;
+  let lastSz = sz;
+  if (t.sub) {
+    const ss = Number(t.subSize) || 12;
+    const SB = Number(t.subBaseline) > 0 ? Number(t.subBaseline) : B + ss * 0.6;
+    h += `<div class="sh-titlehead sized" style="font-family:${fam};font-weight:400;font-size:${ss}pt;line-height:1;margin:${Math.max(0, SB - 0.88 * mm(ss) - B - 0.12 * mm(sz)).toFixed(2)}mm 0 0">${esc(t.sub)}</div>`;
+    last = SB;
+    lastSz = ss;
+  }
+  // 次の行（最初の大問の見出し）までの空き（見出しの行の高さの分を引いた概算。大問の前の空きは別に入る）
+  const next = Number(t.next) > 0 ? Number(t.next) : last + 12;
+  const hs = mm(Number(head?.size) || 13);
+  h += `<div style="height:${Math.max(0, next - last - 0.12 * mm(lastSz) - hs * 1.05 - (Number(l.spaceBefore) || 0)).toFixed(2)}mm"></div>`;
+  return h;
 }
 
 const stars = (n) => (n > 0 ? `<span class="sh-stars">難易度 ${'★'.repeat(n)}${'☆'.repeat(5 - n)}</span>` : '');
@@ -404,6 +459,8 @@ export function renderSheetParts(doc, macros, opts = {}) {
   ].filter(Boolean).join(' ');
   const vars =
     `--sub-indent:${Number(s.indent)}mm;--sub-sep:${Number(s.sep)}mm;--sub-gap:${Number(s.gap)}mm;--sub-wrap:${Number(s.wrapIndent) || 0}mm;--math-indent:${Number(l.mathIndent)}mm;--par-skip:${Number(l.parSkip)}mm;` +
+    (Number(s.before) ? `--sub-before:${Number(s.before)}mm;` : '') +
+    (Number(l.displaySkip) > 0 ? `--disp-above:${Number(l.displaySkipAbove) > 0 ? Number(l.displaySkipAbove) : Number(l.displaySkip)}mm;--disp-below:${Number(l.displaySkip)}mm;` : '') +
     contentStyle(l).vars;
   // 上下左右の余白（個別指定があればそれを使う。PDF と同じ考え方）
   const pm = pageMargins(l);
@@ -411,7 +468,10 @@ export function renderSheetParts(doc, macros, opts = {}) {
   const padR = pm.right ?? padX;
   const ls = Number(l.letterSpace) > 0 ? `;--letter-space:${Number(l.letterSpace)}em` : '';
   let out = `<div class="${cls}" style="width:${w}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt;line-height:${lineHeight.toFixed(2)};${vars}${ls}">`;
-  if (l.header) out += l.headerStyle === 'title' ? `<div class="sh-titlehead">${esc(l.header)}</div>` : `<div class="sh-runhead">${esc(l.header)}</div>`;
+  if (l.header) {
+    if (l.headerStyle === 'title' || l.headerStyle === 'both') out += titleHtml(l, pm.top, h);
+    else out += `<div class="sh-runhead${l.headerAlign === 'outside' ? ' outside' : ''}"${runheadStyle(l)}>${esc(l.header)}</div>`;
+  }
   if (l.titleBlock !== false && (m.title || m.subtitle || m.author || m.date || m.nameField)) {
     out += '<header class="sh-header">';
     if (m.title) out += `<h1>${renderInline(m.title, macros)}</h1>`;
@@ -472,7 +532,8 @@ export function renderSheetParts(doc, macros, opts = {}) {
       out += `<div class="sh-hcol">${num}</div><div>${title || st || ptsAfter ? `<div class="sh-head" style="margin-bottom:${l.spaceAfterHead}mm">${title}${ptsAfter}${st}</div>` : ''}${body}${answer}${spaceEl}</div>`;
     } else {
       const center = h.align === 'center';
-      out += `<div class="sh-head${center ? ' center' : ''}" style="margin-bottom:${l.spaceAfterHead}mm">${num}${title}${ptsAfter}${ptsRight}${st}</div>`;
+      const od = !center && Number(h.outdent) > 0 ? `;margin-left:-${Number(h.outdent)}mm` : '';
+      out += `<div class="sh-head${center ? ' center' : ''}" style="margin-bottom:${l.spaceAfterHead}mm${od}">${num}${title}${ptsAfter}${ptsRight}${st}</div>`;
       out += `<div style="margin-left:${l.bodyIndent}mm">${body}${answer}</div>${spaceEl}`;
     }
     out += '</section>';
@@ -495,32 +556,130 @@ export function renderSheetParts(doc, macros, opts = {}) {
     );
     tail = '</div></div>';
   }
-  // 表紙は別のページとして先頭に置く
-  const cover = m.cover?.enabled
-    ? coverPage(m.cover, opts.totalProblems ?? ps.length, `width:${w}mm;min-height:${paperH}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt`, punct)
-    : '';
-  return { head: cover + head, items, mid, answers, tail: tail + '</div>' };
-}
-
-function coverPage(c, count, style, punct) {
-  let h = `<div class="sheet page cover-page" style="${style}">`;
-  h += '<div class="cv-top">';
-  if (c.header) h += `<div class="cv-header">${esc(c.header)}</div>`;
-  if (c.subject) h += `<div class="cv-subject">${esc(c.subject)}</div>`;
-  if (c.target) h += `<div class="cv-target">${esc(c.target)}</div>`;
-  if (c.time) h += `<div class="cv-time">試験時間　${esc(c.time)}</div>`;
-  h += '</div>';
-  const notes = coverNotes(c, count);
-  if (notes.length) {
-    h += '<div class="cv-notes"><div class="cv-notes-title">注意事項</div><ol>';
-    for (const n of notes) h += `<li>${renderInline(punct(n), {})}</li>`;
-    h += '</ol></div>';
-  }
-  h += '<div class="cv-bottom">';
-  if (c.idField) h += '<table class="cv-id"><tr><th>受験番号</th><td></td></tr><tr><th>氏　　名</th><td></td></tr></table>';
-  if (c.footer) h += `<div class="cv-footer">${esc(punct(c.footer))}</div>`;
-  h += '</div></div>';
-  return h;
+  // 表紙は別のページとして先頭に、裏表紙（解答上の注意）は最後のページとして置く
+  const c = m.cover?.enabled ? { ...defaultCover(), ...m.cover } : null;
+  const pageStyle = `width:${w}mm;min-height:${paperH}mm;height:${paperH}mm;padding:${pm.top}mm ${Number(padR).toFixed(2)}mm ${pm.bottom}mm ${Number(padL).toFixed(2)}mm;font-size:${pt}pt`;
+  const geo = { top: pm.top, left: Number(padL), right: Number(padR), bottom: pm.bottom, w, h: paperH, footBaseline: Number(l.footBaseline) || 0, pageNumber: l.pageNumber };
+  const count = opts.totalProblems ?? ps.length; // レイアウトの画面では先頭の数題だけを描くので、題数は全体のもの
+  const cover = c ? coverPage(c, count, pageStyle, punct, macros, geo) : '';
+  const back = c && coverNotes({ notes: c.backNotes }, count).length ? backCoverPage(c, count, pageStyle, punct, macros, geo) : '';
+  return { head: cover + head, items, mid, answers, tail: tail + '</div>' + back };
 }
 
 const PT_MM = 25.4 / 72.27;
+const mmOf = (pt) => pt * PT_MM;
+
+/** 用紙の上端からのベースライン B（mm）に文字を置く（ページの中での絶対位置） */
+function cvAt(B, sizePt, html, { align = 'center', left, right, family, weight = 400, x } = {}, geo) {
+  const top = (B - 0.88 * mmOf(sizePt)).toFixed(2);
+  const lr = x != null ? `left:${(geo.left + x).toFixed(2)}mm` : `left:${(left ?? geo.left).toFixed(2)}mm;right:${(right ?? geo.right).toFixed(2)}mm`;
+  return `<div class="cv-abs" style="top:${top}mm;${lr};text-align:${align};font-size:${sizePt}pt;font-weight:${weight};${family ? `font-family:${family};` : ''}">${html}</div>`;
+}
+
+/** 注意事項（番号付き。「|」の行は表） */
+function noteListHtml(text, count, punct, macros, { label, num, textX, wrap, pitch, fontPt, itemGap = 0 }) {
+  const items = coverNoteItems(text, count);
+  let h = `<div class="cv-list" style="font-size:${fontPt}pt;line-height:${pitch.toFixed(2)}mm">`;
+  items.forEach((it, i) => {
+    h += `<div class="cv-item" style="padding-left:${wrap}mm;text-indent:${(textX - wrap).toFixed(2)}mm;position:relative${i && itemGap ? `;margin-top:${Number(itemGap)}mm` : ''}">`;
+    h += `<span class="cv-num" style="position:absolute;left:${num}mm;text-indent:0">${esc(label(i + 1))}</span>${renderInline(punct(it.text), macros)}`;
+    if (it.rows.length) {
+      h += `<table class="cv-table" style="margin:${(4.0 - 0.7 * pitch + 0.3 * pitch).toFixed(2)}mm ${(textX - wrap).toFixed(2)}mm ${(6.6 - 0.7 * pitch).toFixed(2)}mm;width:calc(100% - ${(2 * (textX - wrap)).toFixed(2)}mm)">`;
+      for (const r of it.rows) h += `<tr>${r.map((x) => `<td>${renderInline(punct(x), macros)}</td>`).join('')}</tr>`;
+      h += '</table>';
+    }
+    h += '</div>';
+  });
+  return h + '</div>';
+}
+
+/** 表紙のページ番号（表紙にページ番号を付けるとき） */
+function cvPageNumber(geo) {
+  const B = geo.footBaseline > 0 ? geo.footBaseline : geo.h - geo.bottom + 12;
+  const t = geo.pageNumber === 'kyotsu' || geo.pageNumber === 'dash' ? '—&ensp;1&ensp;—' : geo.pageNumber === 'endash' ? '–&ensp;1&ensp;–' : '1';
+  return cvAt(B, 10, t, { family: 'var(--serif)' }, geo);
+}
+
+function coverPage(c, count, style, punct, macros, geo) {
+  return c.style === 'kyotsu' ? coverKyotsu(c, count, style, punct, macros, geo) : coverStandard(c, count, style, punct, macros, geo);
+}
+
+function coverStandard(c, count, style, punct, macros, geo) {
+  const P = coverPositions(c, geo.top);
+  const fam = (f) => (f === 'mincho' ? 'var(--serif)' : 'var(--sans)');
+  let h = `<div class="sheet page cover-page" style="${style}">`;
+  const headers = String(c.header || '').split('|').filter((s) => s.trim());
+  headers.forEach((t, i) => (h += cvAt(P.header[i], Number(c.headerSize) || 15, esc(t.trim()), { align: c.headerAlign || 'center', family: fam(c.headerFont) }, geo)));
+  if (c.subject) {
+    const sz = Number(c.subjectSize) || 34;
+    const sub = c.subtitle ? `<span style="font-size:${Math.max(10, sz * 0.6)}pt;margin-left:0.5em">${esc(c.subtitle)}</span>` : '';
+    h += cvAt(P.subject, sz, esc(c.subject) + sub, { family: fam(c.subjectFont), weight: c.subjectBold ? 700 : 400 }, geo);
+  }
+  if (c.target) h += cvAt(P.target, Number(c.targetSize) || 15, esc(c.target), { family: 'var(--sans)' }, geo);
+  if (c.points) h += cvAt(P.points, Number(c.pointsSize) || 12, esc(c.points), {}, geo);
+  if (c.time) h += cvAt(P.time, Number(c.timeSize) || 12, `${c.timeLabel ? `${esc(c.timeLabel)}　` : ''}${esc(c.time)}`, { family: fam(c.timeFont), align: c.timeAlign || 'center' }, geo);
+  const pitch = Number(c.notesPitch) > 0 ? Number(c.notesPitch) : 6.0;
+  const nsz = Number(c.notesSize) > 0 ? Number(c.notesSize) : 10.5;
+  const num = COVER_NUMBERS[c.notesNumber] || COVER_NUMBERS.dot;
+  const g = coverNotesGeometry(c, geo.left, geo.w - geo.left - geo.right);
+  const list = noteListHtml(c.notes, count, punct, macros, { label: num.html, num: g.num, textX: g.text, wrap: g.wrap, pitch, fontPt: nsz, itemGap: c.notesItemGap });
+  const tsz = Number(c.notesTitleSize) > 0 ? Number(c.notesTitleSize) : nsz;
+  const tx = Number(c.notesTitleX) > 0 ? Number(c.notesTitleX) - geo.left : 0;
+  const title = c.notesTitle
+    ? `<div class="cv-notes-title" style="font-size:${tsz}pt;text-align:${c.notesTitleAlign === 'center' ? 'center' : 'left'};padding-left:${tx}mm;height:${(c.notesGap != null && c.notesGap !== '' ? Number(c.notesGap) : pitch).toFixed(2)}mm;margin:0">${esc(c.notesTitle)}</div>`
+    : '';
+  const top = (P.notes - 0.88 * mmOf(tsz) - (pitch - mmOf(tsz)) / 2).toFixed(2);
+  h += `<div class="cv-notes${c.notesFrame ? ' framed' : ''}" style="position:absolute;top:${top}mm;left:${geo.left}mm;right:${(geo.right + g.right).toFixed(2)}mm;line-height:${pitch}mm;margin:0">${title}${list}</div>`;
+  h += `<div class="cv-bottom" style="position:absolute;left:${geo.left}mm;right:${geo.right}mm;bottom:${geo.bottom}mm">`;
+  if (c.idField) {
+    const labels = String(c.idLabels || '受験番号|氏　　名').split('|').filter(Boolean);
+    h += `<table class="cv-id">${labels.map((x) => `<tr><th>${esc(x.trim())}</th><td></td></tr>`).join('')}</table>`;
+  }
+  if (c.footer) h += `<div class="cv-footer">${esc(punct(c.footer))}</div>`;
+  h += '</div>';
+  if (c.pageNumber) h += cvPageNumber(geo);
+  return h + '</div>';
+}
+
+
+/** 共通テストの表紙（位置は texExport.js の texCoverKyotsu と同じ） */
+function coverKyotsu(c, count, style, punct, macros, geo) {
+  let h = `<div class="sheet page cover-page kyotsu" style="${style}">`;
+  if (c.footer) h += cvAt(32.1, 10, `<span class="cv-kbox">${esc(punct(c.footer))}</span>`, { family: 'var(--sans)' }, geo);
+  if (c.subject) {
+    const sub = c.subtitle ? `<span style="font-size:12pt;font-family:var(--serif);margin-left:2.2mm;position:relative;top:-1.4mm">${esc(c.subtitle)}</span>` : '';
+    h += cvAt(47.5, 22, esc(c.subject) + sub, { align: 'left', x: 7.0, family: 'var(--sans)' }, geo);
+  }
+  if (c.points || c.time) {
+    h += `<div class="cv-abs cv-kparen" style="top:39.7mm;left:${(geo.left + 111.1).toFixed(2)}mm;width:21.2mm;height:10.6mm"></div>`;
+    if (c.points) h += cvAt(42.4, 10, esc(c.points), { align: 'right', left: 0, right: geo.w - geo.left - 127.0 }, geo);
+    if (c.time) h += cvAt(49.4, 10, esc(c.time), { align: 'right', left: 0, right: geo.w - geo.left - 127.0 }, geo);
+  }
+  if (c.notesTitle) {
+    h += cvAt(59.3, 10, '<b style="font-family:var(--serif)">I</b>', { align: 'left', x: 0 }, geo);
+    h += cvAt(59.3, 10, esc(c.notesTitle), { align: 'left', x: 7.05, family: 'var(--sans)' }, geo);
+  }
+  const list = noteListHtml(c.notes, count, punct, macros, { label: (n) => String(n), num: 4.7, textX: 10.58, wrap: 7.05, pitch: 7.03, fontPt: 10 });
+  h += `<div class="cv-abs" style="top:${(66.3 - 0.88 * mmOf(10) - (7.03 - mmOf(10)) / 2).toFixed(2)}mm;left:${geo.left}mm;right:${geo.right}mm;font-family:var(--serif)">${list}</div>`;
+  if (coverNotes({ notes: c.backNotes }, count).length || c.backRef) {
+    h += cvAt(221.6, 10, '<b style="font-family:var(--serif)">II</b>', { align: 'left', x: 0 }, geo);
+    h += cvAt(221.6, 10, esc(c.backTitle || '解答上の注意'), { align: 'left', x: 7.05, family: 'var(--sans)' }, geo);
+    if (c.backRef) h += cvAt(228.6, 9.9, esc(punct(c.backRef)), { align: 'left', x: 7.05, family: 'var(--sans)' }, geo);
+  }
+  if (c.pageNumber) h += cvPageNumber(geo);
+  return h + '</div>';
+}
+
+/** 裏表紙（解答上の注意） */
+function backCoverPage(c, count, style, punct, macros, geo) {
+  const kyotsu = c.style === 'kyotsu';
+  let h = `<div class="sheet page cover-page back-cover" style="${style}">`;
+  const title = esc(c.backTitle || '解答上の注意');
+  h += kyotsu
+    ? `<div class="cv-back-title" style="font-size:10pt;line-height:7.03mm"><b style="font-family:var(--serif);display:inline-block;width:7.05mm">II</b>${title}</div>`
+    : `<div class="cv-back-title center">${title}</div>`;
+  const num = kyotsu ? { html: (n) => String(n) } : COVER_NUMBERS[c.notesNumber] || COVER_NUMBERS.dot;
+  h += noteListHtml(c.backNotes, count, punct, macros, kyotsu ? { label: num.html, num: 4.7, textX: 10.58, wrap: 7.05, pitch: 7.03, fontPt: 10 } : { label: num.html, num: 1.0, textX: 7.0, wrap: 7.0, pitch: 7.03, fontPt: 10 });
+  return h + '</div>';
+}
+
