@@ -7,7 +7,9 @@ const tex = require('./tex');
 const { readDocxXml } = require('./zip');
 
 const isMac = process.platform === 'darwin';
-const FILE_EXT = 'mathprob';
+// 問題集ファイルの拡張子。以前の .mathprob も開ける
+const FILE_EXT = 'mpb';
+const OPEN_EXTS = ['mpb', 'mathprob'];
 
 let mainWindow = null;
 let isDirty = false;
@@ -34,7 +36,7 @@ function enginePath() {
 }
 
 function findFileArg(argv) {
-  return argv.slice(1).find((a) => a.toLowerCase().endsWith(`.${FILE_EXT}`) && fssync.existsSync(a)) || null;
+  return argv.slice(1).find((a) => OPEN_EXTS.some((x) => a.toLowerCase().endsWith(`.${x}`)) && fssync.existsSync(a)) || null;
 }
 
 function send(action, payload) {
@@ -220,7 +222,7 @@ function defaultOutPath(projectPath, docTitle, ext) {
 function registerIpc() {
   ipcMain.handle('file:open', async () => {
     const r = await dialog.showOpenDialog(mainWindow, {
-      filters: [{ name: '問題集ファイル', extensions: [FILE_EXT, 'json'] }],
+      filters: [{ name: '問題集ファイル', extensions: [...OPEN_EXTS, 'json'] }],
       properties: ['openFile'],
     });
     if (r.canceled || !r.filePaths[0]) return null;
@@ -233,7 +235,8 @@ function registerIpc() {
     let target = p;
     if (!target || saveAs) {
       const r = await dialog.showSaveDialog(mainWindow, {
-        defaultPath: p || path.join(app.getPath('documents'), `${safeName(data?.meta?.title)}.${FILE_EXT}`),
+        // 名前を付けて保存は新しい拡張子 .mpb で（以前の .mathprob のファイルは上書き保存ならそのまま）
+        defaultPath: p ? p.replace(/\.mathprob$/i, `.${FILE_EXT}`) : path.join(app.getPath('documents'), `${safeName(data?.meta?.title)}.${FILE_EXT}`),
         filters: [{ name: '問題集ファイル', extensions: [FILE_EXT] }],
       });
       if (r.canceled || !r.filePath) return null;

@@ -736,7 +736,7 @@ function convertPasteInput() {
     const doc = normalizeDoc(json);
     pdDetected = { source: 'json', problems: doc.problems.map((p) => ({ title: p.title, body: p.body, solution: p.solution, tags: p.tags, difficulty: p.difficulty })) };
     $('#pd-output').value = pdDetected.problems.map((p, i) => `【問題${i + 1}】${p.title ? `（${p.title}）` : ''}\n${p.body}${p.solution.trim() ? `【解答${i + 1}】\n${p.solution}` : ''}`).join('\n');
-    $('#pd-source').textContent = '.mathprob（JSON）';
+    $('#pd-source').textContent = '問題集ファイル（JSON）';
     updatePasteTargets();
     renderPastePreview();
     return;
@@ -797,6 +797,7 @@ function promptOptions() {
     subject: saved.subject || state.doc.meta.subject || 'math',
     format: saved.format || 'paste',
     request: saved.request || '',
+    fileName: saved.fileName || '',
   };
 }
 let pdPrompt = null;
@@ -808,9 +809,12 @@ function renderPromptPanel() {
   segOn('pd-p-format', o.format);
   $('#pd-p-format-hint').textContent =
     o.format === 'mathprob'
-      ? 'ファイルを作れる AI 向け。できたファイルを「ファイル → 開く」で開くか、JSON をここに貼り付けます。'
+      ? 'ファイルを作れる AI 向け。できた .mpb ファイルを「開く」で開くか、中身（JSON）をここに貼り付けます。'
       : 'AI の回答のコードブロックをコピーして、下の欄に貼り付けます。';
   if (document.activeElement !== $('#pd-p-request')) $('#pd-p-request').value = o.request;
+  // ファイル名はファイル用の形式のときだけ
+  $('#pd-p-filename-row').classList.toggle('hidden', o.format !== 'mathprob');
+  if (document.activeElement !== $('#pd-p-filename')) $('#pd-p-filename').value = o.fileName || '';
   $('#pd-p-text').value = buildAiPrompt(o);
   $('#pd-p-copied').textContent = '';
 }
@@ -839,6 +843,12 @@ for (const [id, key] of [['pd-p-solution', 'withSolution'], ['pd-p-subject', 'su
     renderPromptPanel();
   });
 }
+$('#pd-p-filename').addEventListener('input', () => {
+  pdPrompt.fileName = $('#pd-p-filename').value;
+  $('#pd-p-text').value = buildAiPrompt(pdPrompt);
+  clearTimeout(pdTimer);
+  pdTimer = setTimeout(savePromptOptions, 400);
+});
 $('#pd-p-request').addEventListener('input', () => {
   pdPrompt.request = $('#pd-p-request').value;
   $('#pd-p-text').value = buildAiPrompt(pdPrompt);

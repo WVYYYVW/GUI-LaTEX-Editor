@@ -195,8 +195,11 @@
           </div>
           <div class="ld-row">
             <span class="ld-k">形式</span>
-            <div class="seg" id="pd-p-format"><button type="button" data-v="paste">貼り付け用</button><button type="button" data-v="mathprob">.mathprob ファイル</button></div>
+            <div class="seg" id="pd-p-format"><button type="button" data-v="paste">貼り付け用</button><button type="button" data-v="mathprob">.mpb ファイル</button></div>
             <span class="hint" id="pd-p-format-hint"></span>
+          </div>
+          <div class="ld-row hidden" id="pd-p-filename-row">
+            <label class="pd-filename">ファイル名（空欄なら AI が内容に合わせて付けます）<input id="pd-p-filename" type="text" placeholder="例: 二次関数_演習3題" spellcheck="false" /></label>
           </div>
           <label class="pd-req">依頼の内容（空欄なら「〇〇の問題を作ってください」）<textarea id="pd-p-request" rows="2" placeholder="例: 二次関数の最大・最小の問題を 3 題。難易度は入試の標準レベル。"></textarea></label>
           <textarea id="pd-p-text" class="pd-p-text" rows="7" readonly spellcheck="false"></textarea>
@@ -205,7 +208,7 @@
           Claude などの回答をコピーして、下の欄に貼り付けてください（Ctrl/⌘+V）。
           表示された回答をそのまま選択したコピーも、「コピー」ボタンでコピーした Markdown も取り込めます。
           数式は $…$ / \[…\] の LaTeX に、箇条書き・太字・表も LaTeX に変換されます。
-          【問題1】【解答1】の区切りや .mathprob（JSON）を貼ると、問題文と解答をまとめて取り込みます。
+          【問題1】【解答1】の区切りや問題集ファイル（.mpb の中身の JSON）を貼ると、問題文と解答をまとめて取り込みます。
         </p>
         <div class="pd-grid">
           <div class="pd-col">

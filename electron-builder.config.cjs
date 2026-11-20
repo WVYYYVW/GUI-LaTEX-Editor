@@ -14,7 +14,8 @@ module.exports = {
   productName: 'LaTeX Problem Editor',
   files: ['electron/**/*', 'dist/renderer/**/*', 'package.json'],
   directories: { output: 'release' },
-  fileAssociations: [{ ext: 'mathprob', name: 'Math Problem Set', role: 'Editor' }],
+  // 問題集ファイル（.mpb）。以前の .mathprob もこのアプリで開く
+  fileAssociations: [{ ext: ['mpb', 'mathprob'], name: 'Math Problem Set', role: 'Editor' }],
   mac: {
     target: [
       { target: 'dmg', arch: ['arm64', 'x64'] },

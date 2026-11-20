@@ -1,7 +1,7 @@
 // AI（Claude・ChatGPT など）に問題を作らせるときのプロンプトと、その出力の読み取り。
 //  - 貼り付け用: 1 つのコードブロックに【問題1】【解答1】…の区切りで LaTeX を書かせる → 「AI の回答を貼り付け」で
 //    問題文と解答を一度に取り込める
-//  - ファイル用: ファイルを作れる AI に .mathprob（JSON）を書き出させる → そのまま「開く」で読める
+//  - ファイル用: ファイルを作れる AI に .mpb（中身は JSON）を書き出させる → そのまま「開く」で読める
 
 const SUBJECT_NAME = { math: '数学', physics: '物理', chemistry: '化学' };
 
@@ -34,8 +34,22 @@ function subjectRules(subject) {
 }
 
 /**
- * @param {{subject?:'math'|'physics'|'chemistry', withSolution?:boolean, format?:'paste'|'mathprob', request?:string}} o
+ * @param {{subject?:'math'|'physics'|'chemistry', withSolution?:boolean, format?:'paste'|'mathprob', request?:string, fileName?:string}} o
  */
+/**
+ * AI に書き出させるファイルの名前。空なら null（AI が内容に合わせて付ける）。
+ * 拡張子が無ければ .mpb を付け、ファイル名に使えない文字は取り除く。
+ */
+export function aiFileName(name) {
+  let s = String(name || '')
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/\s+/g, '_');
+  if (!s) return null;
+  if (!/\.(mpb|mathprob)$/i.test(s)) s += '.mpb';
+  return s;
+}
+
 export function buildAiPrompt(o = {}) {
   const subject = o.subject || 'math';
   const withSolution = o.withSolution !== false;
@@ -54,7 +68,13 @@ export function buildAiPrompt(o = {}) {
   L.push('');
   if (o.format === 'mathprob') {
     L.push('【出力の形式】');
-    L.push('結果を「問題集.mathprob」という名前のファイル（UTF-8 の JSON）として書き出してください。チャットに JSON を貼るのではなく、ファイルとして出力してください（ファイルを作れない場合だけ、JSON 全体を 1 つのコードブロック ```json に入れて出力してください）。');
+    const fileName = aiFileName(o.fileName);
+    L.push(
+      (fileName
+        ? `結果を「${fileName}」という名前のファイル（中身は UTF-8 の JSON）として書き出してください。`
+        : '結果を、内容が分かる短い日本語の名前（例: 二次関数の最大最小_3題.mpb）で、拡張子 .mpb のファイル（中身は UTF-8 の JSON）として書き出してください。') +
+        'チャットに JSON を貼るのではなく、ファイルとして出力してください（ファイルを作れない場合だけ、JSON 全体を 1 つのコードブロック ```json に入れて出力してください）。'
+    );
     L.push('JSON の形は次のとおりです（この形以外のキーは付けない）。');
     L.push('```json');
     L.push(

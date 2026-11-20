@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAiPrompt, splitAiProblems, parseMathprobText } from '../src/renderer/lib/aiPrompt.js';
+import { buildAiPrompt, splitAiProblems, parseMathprobText, aiFileName } from '../src/renderer/lib/aiPrompt.js';
 import { aiTextToLatex } from '../src/renderer/lib/smartPaste.js';
 import { normalizeDoc } from '../src/renderer/lib/model.js';
 
@@ -15,7 +15,13 @@ test('AI 用プロンプト: 問題だけ / 問題と解答、科目ごとの約
   assert.match(only, /\\qty\{/);
   const file = buildAiPrompt({ format: 'mathprob', withSolution: true });
   assert.match(file, /"format": "mathprob"/);
-  assert.match(file, /\.mathprob/);
+  assert.match(file, /拡張子 \.mpb/); // ファイル名を指定しなければ AI が内容に合わせて付ける
+  assert.doesNotMatch(file, /問題集\.mathprob/);
+  // ファイル名を指定したとき（拡張子は付け足し、使えない文字は取り除く）
+  const named = buildAiPrompt({ format: 'mathprob', fileName: '二次関数 演習/3題' });
+  assert.match(named, /「二次関数_演習3題\.mpb」という名前のファイル/);
+  assert.equal(aiFileName('a.mathprob'), 'a.mathprob');
+  assert.equal(aiFileName('  '), null);
 });
 
 test('【問題1】【解答1】の区切りを問題ごとに分ける（コードブロックで貼っても区切りが残る）', () => {
