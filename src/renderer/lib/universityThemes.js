@@ -23,7 +23,153 @@ function theme(id, name, desc, source, pt, lh, layout, meta = {}) {
   };
 }
 
+// ---------------- 大学入学共通テスト ----------------
+// 大学入試センターが公開している令和 8 年度本試験の「数学①」「数学②」の問題冊子（B5・文字情報のある PDF）の
+// 文字と罫線の座標を読み取って測った。本文 24.0〜158.0mm（10pt・1 行 38 字・行送り 7.05mm）、1 行目のベースライン 31.1mm。
+//   - 「第1問」はゴシック 14pt を 23.3mm に、同じ行に「（配点　30）」。大問の本文は +1 字（27.5mm）、段落は 1 字下げ
+//   - 〔1〕〔2〕は 25.7mm に置き、その中身は 34.6mm（大問の本文 +2 字）から。⑴ は中身の左端、本文 +2 字、折り返し +1 字。(i) も同じ形
+//   - 解答欄は線の中心で 12.04×5.69mm の太枠（線 0.4mm）にゴシックの片仮名。3 字以上は 1 字ごとに広がる。選択肢から選ぶ欄は二重の枠、
+//     2 度目以降は細い枠。本文では \blank{ア}・\blank*{コ}・\blank[2]{ア} と書く
+//   - 別行立ての式は左寄せ（+4 字）、前後に 1 行ずつ空ける
+//   - ページ上部の科目名（ゴシック 12pt）は奇数ページは右、偶数ページは左、ベースライン 21.1mm。最初のページは中央に大きく（22pt）
+//   - ページ番号「— 4 —」はベースライン 243.4mm。大問が次のページに続くときは最後の行の下に「（…第1問は次ページに続く。）」（8pt）
+//   - 表紙: 上に枠で囲んだ注意、「数　学　①」と科目、右に（100点／70分）、「I　注意事項」、下に「II　解答上の注意」。裏表紙に解答上の注意
+// 表紙と裏表紙の文面は実物と同じ構成で、言い回しは独自のもの。
+// 表せないもの・違うもの: 実物は 1 ページごとに手で組んでいて、大問の途中でも余白を大きく取ってページを替える（ここでは TeX が自動で
+//   改ページする）／〔2〕の前の改ページ（必要なら本文に \newpage）／表紙の右上の「Ⓛ」や「(2103—1)」などの印刷管理の印／
+//   (i) の字形（実物は 1 字の外字）／マークシートの見本の図（表で代用）。
+const KYOTSU_BACK_NOTES = [
+  '解答は，解答用紙の問題番号に対応する解答欄にマークしなさい。',
+  '問題文中の \\blank{ア}，\\blank{イウ} などには，符号（$-$）または数字（$0$〜$9$）が一つずつ入ります。ア，イ，ウ，…の一つ一つを，解答用紙のア，イ，ウ，…の欄にマークして答えなさい。',
+  '例えば \\blank{アイウ} に $-83$ と答えるときは，次のようにマークします。',
+  '|欄|ア|イ|ウ',
+  '|マークするもの|$-$|$8$|$3$',
+  '分数で答えるときは，符号は分子につけ，それ以上約分できない形で答えなさい。',
+  '小数で答えるときは，指定された桁の一つ下の桁を四捨五入して答えなさい。指定された桁までの $0$ もマークしなさい。',
+  '根号を含む形で答えるときは，根号の中の自然数ができるだけ小さくなる形で答えなさい。',
+  '二重の枠で示した \\blank*{コ} などには，選択肢の中から一つを選んで答えなさい。',
+  '同じ欄が問題文中に 2 度以上出てくるときは，2 度目からは \\blank[2]{サシ} のように細い枠で示します。',
+].join('\n');
+
+function kyotsuTheme(id, name, desc, header, cover, title) {
+  return {
+    id,
+    name,
+    desc,
+    source: 'https://www.dnc.ac.jp/kyotsu/kakomondai/r8/r8_honshiken_mondai.html',
+    university: true,
+    layout: {
+      titleBlock: false,
+      paper: 'b5',
+      marginLeft: 24.0,
+      marginRight: 24.0,
+      marginTop: 26.2, // ltjsarticle の topskip（約 13.9pt）の分（1 行目のベースラインが 31.1mm になる）
+      marginBottom: 29.0, // 1 ページ 29 行
+      bodyPt: 10,
+      lineHeight: 2.0,
+      charsPerLine: 0,
+      header,
+      headerStyle: 'both',
+      headerAlign: 'outside',
+      headerSize: 12,
+      headerFont: 'gothic',
+      headBaseline: 21.1,
+      footBaseline: 243.4,
+      title: { size: 22, font: 'gothic', bold: false, baseline: 36.9, subSize: 12, subBaseline: 45.1, next: 59.8, ...title },
+      contNote: `（${header}第{n}問は次ページに続く。）`,
+      head: { style: 'dai', font: 'gothic', bold: false, size: 14, position: 'above', align: 'left', showTitle: false, gap: 3.0, outdent: 0.7 },
+      spaceBefore: 0,
+      spaceAfterHead: 6.6,
+      bodyIndent: 3.5,
+      parIndent: true,
+      parSkip: 0,
+      part: { style: 'arabicKikko', font: 'mincho', bold: false, size: 0, align: 'left', hang: true, indent: 0, bodyIndent: 7.05, gap: 0, spaceBefore: 0, spaceAfter: 0 },
+      sub: { paren: 'half', indent: 0, sep: 3.5, gap: 7.05, wrap: 'left', wrapIndent: 3.5 },
+      subLabel: 'pparen',
+      sub2: { label: 'roman', indent: 0, sep: 4.4, gap: 7.05, wrap: 'left', wrapIndent: 3.5 },
+      blank: { style: 'kyotsu', width: 12, height: 0 },
+      displayAlign: 'left',
+      mathIndent: 14.1,
+      displaySkip: 7.03,
+      displaySkipAbove: 9.4, // 式の上は行送りの調整が入らないので、そのぶん多めに（前後とも 1 行空き）
+      pointsStyle: 'after',
+      pointsFormat: '（配点　{n}）',
+      newPageEach: true,
+      afterEach: 'none',
+      pageNumber: 'kyotsu',
+      punct: 'commaMaru',
+    },
+    meta: {
+      answerMode: 'separate',
+      spaceAfter: 0,
+      showDifficulty: false,
+      cover: {
+        enabled: true,
+        style: 'kyotsu',
+        header: '',
+        target: '',
+        idField: false,
+        notesTitle: '注　意　事　項',
+        footer: '試験開始の合図があるまで，この問題冊子を開いてはいけません。',
+        backTitle: '解答上の注意',
+        backRef: '解答上の注意は裏表紙に書いてあります。問題冊子を裏返して必ず読みなさい。',
+        backNotes: KYOTSU_BACK_NOTES,
+        pageNumber: true,
+        points: '100点',
+        time: '70分',
+        timeLabel: '',
+        ...cover,
+      },
+    },
+  };
+}
+
+export const KYOTSU_THEMES = [
+  kyotsuTheme(
+    'kyotsu-math1',
+    '共通テスト（数学①）',
+    '表紙・注意事項・解答欄の枠まで共通テストの冊子に合わせる',
+    '数学Ⅰ，数学Ａ',
+    {
+      subject: '数　学　①',
+      subtitle: '〔『数学Ⅰ，数学Ａ』〕',
+      firstPage: 4,
+      notes: [
+        '出題科目とページは，次の表のとおりです。',
+        '|出　題　科　目|ペ　ー　ジ|解　答　方　法',
+        '|『数学Ⅰ，数学Ａ』|4〜|全部の問題に解答しなさい。',
+        '解答用紙に正しく記入・マークしていない場合は，採点できないことがあります。とくに，解答用紙の\\textbf{解答科目欄にマークがない場合や，複数の科目にマークした場合は，0点になります。}',
+        '試験中に問題冊子の印刷の乱れ，ページの抜けや重なり，解答用紙の汚れなどに気づいたときは，手を挙げて監督者に知らせなさい。',
+        '問題冊子の余白は下書きに使ってかまいませんが，どのページも切り離してはいけません。',
+        '試験が終わったら，問題冊子は持ち帰りなさい。',
+      ].join('\n'),
+    },
+    { sub: '（全　問　必　答）' }
+  ),
+  kyotsuTheme(
+    'kyotsu-math2',
+    '共通テスト（数学②）',
+    '数学Ⅱ・B・C の冊子。選択問題の注意つき',
+    '数学Ⅱ，数学Ｂ，数学Ｃ',
+    {
+      subject: '数　学　②',
+      subtitle: '〔『数学Ⅱ，数学Ｂ，数学Ｃ』〕',
+      firstPage: 3,
+      notes: [
+        'この問題冊子には，{n}問の問題があります。',
+        '解答用紙に正しく記入・マークしていない場合は，採点できないことがあります。',
+        '試験中に問題冊子の印刷の乱れ，ページの抜けや重なり，解答用紙の汚れなどに気づいたときは，手を挙げて監督者に知らせなさい。',
+        '\\textbf{選択問題は，指定された数の問題を選んで}，その問題番号の解答欄に解答しなさい。',
+        '問題冊子の余白は下書きに使ってかまいませんが，どのページも切り離してはいけません。',
+        '試験が終わったら，問題冊子は持ち帰りなさい。',
+      ].join('\n'),
+    },
+    { sub: '' }
+  ),
+];
+
 export const UNIVERSITY_THEMES = [
+  ...KYOTSU_THEMES,
   // 東京大学：「第 1 問」を中央に。本文 13.7〜168.1mm（左右とも約 13.8mm）。(1) は本文の左端、折り返しは 1 字下げ
   theme('univ-tokyo', '東京大学', '「第 1 問」中央・1問1ページ・B5', 'https://www.u-tokyo.ac.jp/ja/admissions/undergraduate/r8_exam.html', 11.5, 1.9, {
     paper: 'b5',

@@ -389,6 +389,8 @@
               <div class="ld-slider"><span class="ld-k">部の前の空き</span><input data-l="part.spaceBefore" type="range" min="0" max="20" step="0.5" /><output></output><span class="unit">mm</span></div>
               <div class="ld-slider"><span class="ld-k">番号の後の空き</span><input data-l="part.spaceAfter" type="range" min="0" max="10" step="0.5" /><output></output><span class="unit">mm</span></div>
               <div class="ld-slider"><span class="ld-k">同じ行の空き</span><input data-l="part.gap" type="range" min="0" max="10" step="0.25" /><output></output><span class="unit">mm</span></div>
+              <div class="ld-row"><label class="ld-check"><input data-l="part.hang" type="checkbox" /> 部の中身全体を字下げする（番号は字下げの中に置く）</label></div>
+              <div class="ld-slider"><span class="ld-k">部の中身の字下げ</span><input data-l="part.bodyIndent" type="range" min="0" max="20" step="0.05" /><output></output><span class="unit">mm</span></div>
               <div class="ld-row">
                 <span class="ld-k">空欄の形</span>
                 <div class="seg seg-wrap" data-seg="blank.style" id="ld-blank-styles"></div>
@@ -430,9 +432,9 @@
               </div>
               <div class="ld-row">
                 <label>ページ上部の文字<input data-l="header" type="text" placeholder="例: 数学（理系）" /></label>
-                <div class="seg" data-seg="headerStyle"><button data-v="running">各ページに小さく</button><button data-v="title">1ページ目に大きく</button></div>
+                <div class="seg" data-seg="headerStyle"><button data-v="running">各ページに小さく</button><button data-v="title">1ページ目に大きく</button><button data-v="both">両方</button></div>
                 <span class="ld-k">ページ番号</span>
-                <div class="seg" data-seg="pageNumber"><button data-v="plain">1</button><button data-v="dash">— 1 —</button><button data-v="endash">– 1 –</button><button data-v="none">なし</button></div>
+                <div class="seg" data-seg="pageNumber"><button data-v="plain">1</button><button data-v="dash">— 1 —</button><button data-v="endash">– 1 –</button><button data-v="kyotsu">共通テスト</button><button data-v="none">なし</button></div>
               </div>
             </section>
           </div>
@@ -497,6 +499,18 @@
           <label>注意事項（1 行に 1 項目。{n} は問題数に置き換わります）<textarea name="cover.notes" rows="5"></textarea></label>
           <label class="check"><input name="cover.idField" type="checkbox" /> 受験番号・氏名の欄を付ける</label>
           <label>表紙の下に入れる一文<input name="cover.footer" type="text" /></label>
+          <div class="two">
+            <label>表紙の組み方
+              <select name="cover.style" data-cover-extra>
+                <option value="standard">標準</option>
+                <option value="kyotsu">共通テスト（上の一文は枠で囲んで上に）</option>
+              </select>
+            </label>
+            <label>配点<input name="cover.points" type="text" placeholder="例: 100点" data-cover-extra /></label>
+          </div>
+          <label>科目名の右に入れる文字<input name="cover.subtitle" type="text" placeholder="例: 〔『数学Ⅰ，数学Ａ』〕" data-cover-extra /></label>
+          <label>裏表紙の注意（1 行に 1 項目。空なら裏表紙なし。「|」で始まる行は表）<textarea name="cover.backNotes" rows="3" data-cover-extra></textarea></label>
+          <label class="check"><input name="cover.pageNumber" type="checkbox" data-cover-extra /> 表紙にもページ番号を付ける（次のページを 2 ページ目にする）</label>
         </fieldset>
         <fieldset>
           <legend>TeX 環境（PDF 作成）</legend>

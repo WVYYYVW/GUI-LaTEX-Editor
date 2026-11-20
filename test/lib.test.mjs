@@ -233,7 +233,7 @@ test('小問のまとまりの前後にも小問の間隔を入れる（小問�
   applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-niigata'));
   const tex = buildTex(doc);
   assert.match(tex, /\\def\\@listi\{\\lpe@oi\\topsep7\.5mm/);
-  assert.match(tex, /\\renewcommand\{\\enumerate\}\[1\]\[\]\{\\lpe@pre\\lpe@enumerate/);
+  assert.match(tex, /\\renewcommand\{\\enumerate\}\[1\]\[\]\{\\lpe@pre\\lpe@presub\\lpe@enumerate/);
   // 入れ子の enumerate で包み直さない（無限に展開されて TeX が止まるのを防ぐ）
   assert.match(tex, /\\itemsep7\.5mm\}\\let\\lpe@pre\\relax\}/);
   // 全体の \@listi は書き換えない（center などの前後の空きが変わらないように）
@@ -243,4 +243,97 @@ test('小問のまとまりの前後にも小問の間隔を入れる（小問�
 test('句読点の統一は数式の中を変えない', () => {
   const l = { punct: 'commaPeriod' };
   assert.equal(applyPunct('a、b。$f(x)、y$', l, findMathRanges), 'a，b．$f(x)、y$');
+});
+
+import { KYOTSU_THEMES } from '../src/renderer/lib/universityThemes.js';
+import { normalizeLayout, defaultCover } from '../src/renderer/lib/layout.js';
+import { coverNoteItems } from '../src/renderer/lib/texExport.js';
+import { renderLatex } from '../src/renderer/lib/preview.js';
+import { normalizeDoc } from '../src/renderer/lib/model.js';
+
+test('共通テストのテーマ: 表紙・裏表紙・見出し・解答欄・続きの一文を TeX に出す', () => {
+  const doc = newDocument(true);
+  doc.problems[0].points = 30;
+  doc.problems[0].body = '\\Part 文章 \\blank{ア} \\blank*{イ} \\blank[2]{ア}\n\\begin{enumerate}\\item a\\begin{enumerate}\\item b\\end{enumerate}\\end{enumerate}';
+  applyTheme(doc.meta, KYOTSU_THEMES[0]);
+  assert.equal(doc.meta.cover.enabled, true);
+  assert.equal(doc.meta.cover.style, 'kyotsu');
+  const tex = buildTex(doc);
+  // B5・本文 24.0〜158.0mm・ページ上部の文字とページ番号の位置
+  assert.match(tex, /paperwidth=182mm,paperheight=257mm,left=24mm,right=24mm,top=26\.2mm,bottom=29mm,headheight=5mm,headsep=5\.10mm,footskip=15\.40mm/);
+  // 奇数ページは右、偶数ページは左の科目名。1 ページ目は大きな見出し（上部の文字なし）
+  assert.match(tex, /\\ifodd\\value\{page\}\\hfil\{\\sffamily\\gtfamily\\fontsize\{12pt\}/);
+  assert.match(tex, /\\thispagestyle\{lpeplain\}/);
+  assert.match(tex, /（全　問　必　答）/);
+  // 「第1問（配点　30）」
+  assert.match(tex, /\\hspace\*\{-0\.7mm\}\{\\lpeheadfont\\lpenum\{1\}\}\\hspace\{3mm\}（配点　30）/);
+  // 大問の始まり・終わりの目印と「次ページに続く」
+  assert.match(tex, /\\InsertMark\{lpe\}\{1\}/);
+  assert.match(tex, /（数学Ⅰ，数学Ａ第\{\\lpe@m\}問は次ページに続く。）/);
+  // 〔1〕の中身全体を字下げ（\Part から次の \Part / 大問の終わりまでのリスト）
+  assert.match(tex, /\\newcommand\{\\lpepartend\}/);
+  assert.match(tex, /\\lpepartend\n\\end\{lpebody\}/);
+  // 解答欄の枠: 二重の枠と 2 度目以降の細い枠
+  assert.match(tex, /\\newcommand\{\\lpeblank\}\{\\@ifstar/);
+  assert.match(tex, /12\.04mm/);
+  // 2 段目の小問は (i)
+  assert.match(tex, /\\setlist\[enumerate,2\]\{label=\(\\roman\*\)/);
+  assert.match(tex, /\\renewcommand\{\\labelenumii\}\{\(\\roman\{enumii\}\)\}/);
+  // 表紙（共通テストの組み方）・ページ番号つきで 4 ページ目から・裏表紙
+  assert.match(tex, /試験開始の合図があるまで/);
+  assert.match(tex, /\\loop\\ifnum\\value\{page\}<4/);
+  assert.match(tex, /\\begin\{tabularx\}/);
+  assert.match(tex, /II\}\\hspace\*\{7\.05mm\}\{\\sffamily\\gtfamily 解答上の注意\}/);
+  assert.match(tex, /\\clearpage\\ifodd\\value\{page\}\\thispagestyle\{empty\}\\null\\newpage\\fi/);
+});
+
+test('解答欄の * と [2]、部のまとまりをプレビューにも出す', () => {
+  const h = renderLatex('\\Part あ \\blank{ア} \\blank*{イ} \\blank[2]{ウ} \\blank*[2]{エ}\n\n\\Part い', {});
+  assert.match(h, /<span class="pv-blank">ア<\/span>/);
+  assert.match(h, /<span class="pv-blank dbl">イ<\/span>/);
+  assert.match(h, /<span class="pv-blank again">ウ<\/span>/);
+  assert.match(h, /<span class="pv-blank dbl again">エ<\/span>/);
+  assert.equal(h.split('<div class="pv-partbody">').length - 1, 2);
+});
+
+test('表紙の注意事項の表（「|」の行）を項目にまとめる', () => {
+  const items = coverNoteItems('出題科目は次のとおり。\n|科目|ページ\n|数学|1〜{n}\n試験後は持ち帰る。', 3);
+  assert.deepEqual(items, [
+    { text: '出題科目は次のとおり。', rows: [['科目', 'ページ'], ['数学', '1〜3']] },
+    { text: '試験後は持ち帰る。', rows: [] },
+  ]);
+});
+
+test('新しい項目は既定値で補い、古いファイルも開ける', () => {
+  const l = normalizeLayout({ head: { style: 'box' }, part: { style: 'alpha' } });
+  assert.equal(l.title.size, 0);
+  assert.equal(l.sub2.label, '');
+  assert.equal(l.part.hang, false);
+  assert.equal(l.headerAlign, 'center');
+  const d = normalizeDoc({ meta: { cover: { enabled: true, subject: '物理' } }, problems: [{ body: 'x' }] });
+  assert.equal(d.meta.cover.style, 'standard');
+  assert.equal(d.meta.cover.subject, '物理');
+  assert.equal(d.meta.cover.backNotes, '');
+  // 従来のテーマの TeX には新しい命令が入らない
+  const doc = newDocument(true);
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-tohoku'));
+  const tex = buildTex(doc);
+  assert.doesNotMatch(tex, /InsertMark|lpeplain\}\n|\\setlist\[enumerate,2\]/);
+});
+
+test('表紙の設定を持つテーマから持たないテーマに替えると、表紙の文面は既定に戻る', () => {
+  const doc = newDocument(true);
+  applyTheme(doc.meta, KYOTSU_THEMES[1]);
+  assert.equal(doc.meta.cover.themeId, 'kyotsu-math2');
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-niigata'));
+  assert.equal(doc.meta.cover.style, 'standard');
+  assert.equal(doc.meta.cover.subject, defaultCover().subject);
+});
+
+test('enumitem では ⑴・⒜・ア の番号を * 付きで使う（enumitem に番号の形を登録する）', () => {
+  const doc = newDocument(true);
+  applyTheme(doc.meta, UNIVERSITY_THEMES.find((t) => t.id === 'univ-kyoto'));
+  const tex = buildTex(doc);
+  assert.match(tex, /\\AddEnumerateCounter\{\\lpepparen\}\{\\lpe@ppn\}\{⑽\}/);
+  assert.match(tex, /\\setlist\[enumerate,1\]\{label=\\lpepparen\*,/);
 });

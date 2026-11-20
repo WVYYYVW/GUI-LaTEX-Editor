@@ -553,3 +553,60 @@ code { font-family: var(--mono); font-size: 0.95em; }
 /* 「改ページ」の目印が次の大問の 1 行目に重ならないように（本文の行送りを受け継がず、下に空きを取る） */
 .sh-pagebreak { line-height: 1; margin: 8mm 0 5mm; }
 .sh-pagebreak span { top: -0.55em; line-height: 1; display: inline-block; }
+
+/* ---------- 共通テストの体裁・表紙の細部 ---------- */
+/* 解答欄: 線の中心で 12.04×5.69mm の太枠（0.4mm）、ベースラインの下 1.5mm まで。二重の枠（\blank*）と 2 度目以降の細い枠（\blank[2]） */
+.blank-kyotsu .pv-blank {
+  min-width: 12.44mm; height: 6.09mm; line-height: 5.29mm; padding: 0 2.3mm; border: 0.4mm solid currentColor;
+  font-family: var(--sans); vertical-align: -1.7mm; box-sizing: border-box;
+}
+.blank-kyotsu .pv-blank.again { border-width: 0.12mm; }
+.blank-kyotsu .pv-blank.dbl { box-shadow: inset 0 0 0 0.44mm #fff, inset 0 0 0 0.56mm currentColor; }
+.blank-box .pv-blank.dbl { border-style: double; border-width: 2.2pt; }
+/* 別行立ての式の上下の空き（テーマで指定したとき） */
+.page .katex-display { margin-top: var(--disp-above, 1em); margin-bottom: var(--disp-below, 1em); }
+/* 部の中身全体を字下げ（番号は字下げの中にぶら下げる） */
+.part-hang .pv-partbody { padding-left: var(--part-body, 0); margin-top: var(--part-sb, 0); }
+.part-hang .pv-partbody > .pv-par:first-child { text-indent: 0; }
+.part-hang .pv-partbody > .pv-par:first-child > .pv-part {
+  display: inline-block; margin: 0 0 0 calc(var(--part-indent, 0mm) - var(--part-body, 0mm)); min-width: calc(var(--part-body, 0mm) - var(--part-indent, 0mm));
+}
+.pv-partbody:not(:first-child) > .pv-par:first-child > .pv-part:first-child { margin-top: var(--part-sb, 4mm); }
+.part-arabicKikko .pv-part::before { content: '〔' counter(lpepart) '〕'; }
+/* 2 段目の小問（小問の中の小問） */
+.page[class*='sub2-'] ol ol { list-style: none; counter-reset: en; padding-left: var(--sub2-indent) !important; margin-top: var(--sub2-gap) !important; margin-bottom: var(--sub2-gap) !important; }
+.page[class*='sub2-'] ol ol > li { counter-increment: en; position: relative; margin-bottom: var(--sub2-gap); }
+.page[class*='sub2-'] ol ol > li::before { position: absolute; right: calc(100% + var(--sub2-sep)); left: auto; }
+.page.sub2-roman ol ol > li::before { content: '(' counter(en, lower-roman) ')'; }
+.page.sub2-alpha ol ol > li::before { content: '(' counter(en, lower-alpha) ')'; }
+.page.sub2-paren ol ol > li::before { content: '(' counter(en) ')'; }
+.page.sub2-pparen ol ol > li::before { content: counter(en, lpe-pparen); }
+.page.sub2-aparen ol ol > li::before { content: counter(en, lpe-aparen); }
+.page.sub2-kata ol ol > li::before { content: '(' counter(en, katakana) ')'; }
+.page.sub2-wrapleft ol ol { padding-left: var(--sub2-wrap) !important; }
+.page.sub2-wrapleft ol ol > li::before { position: static !important; display: inline-block; margin-left: calc(var(--sub2-indent) - var(--sub2-wrap)); margin-right: var(--sub2-sep); }
+/* 「問」が太字の小問番号・太字の片仮名 */
+.sub-toiBold ol.en-decimal, .sub-toiBoldDot ol.en-decimal, .sub-kataBold ol.en-decimal { list-style: none; counter-reset: en; padding-left: 2.4em; }
+.sub-toiBold ol.en-decimal > li, .sub-toiBoldDot ol.en-decimal > li, .sub-kataBold ol.en-decimal > li { counter-increment: en; position: relative; }
+.sub-toiBold ol.en-decimal > li::before { content: '問 ' counter(en); position: absolute; font-family: var(--sans); font-weight: 700; }
+.sub-toiBoldDot ol.en-decimal > li::before { content: '問 ' counter(en) '.'; position: absolute; font-family: var(--sans); font-weight: 700; }
+.sub-kataBold ol.en-decimal > li::before { content: counter(en, katakana); position: absolute; font-family: var(--sans); font-weight: 700; }
+/* ページ上部の文字（奇数ページは右。プレビューは 1 枚の紙なので右寄せで見せる）・1 ページ目の大きな見出し */
+.sh-runhead.outside { text-align: right; }
+.sh-titlehead.sized { margin-bottom: 0; }
+/* 表紙: 位置を mm で指定して置く */
+.cover-page { position: relative; box-sizing: border-box; }
+.cv-abs { position: absolute; line-height: 1; }
+.cover-page b, .cover-page strong { font-family: var(--sans); }
+.cv-notes.framed { border: 0.35mm solid currentColor; padding: 3mm; }
+.cv-notes.framed .cv-notes-title { text-align: center; }
+.cv-list { font-family: var(--serif); }
+.cv-table { border-collapse: collapse; text-indent: 0; }
+.cv-table td { border: 0.15mm solid currentColor; height: 7mm; padding: 0 1.5mm; text-align: center; line-height: 1.2; }
+.cv-table td:last-child { text-align: left; }
+.cv-kbox { display: inline-block; border: 0.12mm solid currentColor; padding: 0.6mm 1.64mm 0.4mm; }
+.cv-kparen::before, .cv-kparen::after { content: ''; position: absolute; top: 0; bottom: 0; width: 1.6mm; border: 0.25mm solid currentColor; }
+.cv-kparen::before { left: 0; border-right: none; border-radius: 3mm 0 0 3mm; }
+.cv-kparen::after { right: 0; border-left: none; border-radius: 0 3mm 3mm 0; }
+.cv-back-title { font-family: var(--sans); margin-bottom: 0; }
+.cv-back-title.center { text-align: center; font-weight: 700; margin-bottom: 3mm; }
